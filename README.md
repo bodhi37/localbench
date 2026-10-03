@@ -116,9 +116,12 @@ if it had completed.
 - `localbench score` — whole suite, one table
 - `localbench score --bench bbh` — score scoped to one benchmark
 - `localbench score --models a,b` — a subset of models
-- `localbench score --run <run_id>` — one run; default is the **newest run per
-  model**, so a model is never double-counted by repeated runs
+- `localbench score --run <run_id>` — one run; default is the **newest run
+  per model per benchmark**, so repeated runs never double-count and a
+  model's older benchmarks are not silently dropped
 - `localbench score --json` — machine-readable
+- `localbench netguard status` / `install` / `verify` / `uninstall` — manage
+  the kernel egress guard
 
 Every result row carries its own `expected` denominator, so scores stay correct
 even when `--limit` or `--tasks` changes how much of a benchmark was run.
@@ -136,7 +139,10 @@ localbench/                 the package
   scoring.py                per-benchmark accuracy, weighted suite score
   report.py                 results/REPORT.md
   fetch.py                  dataset download + normalisation
+  netguard.py               egress-guard stamp checks + sandbox argv wrapping
   vendor/ifeval/            vendored official IFEval checkers (Apache-2.0)
+scripts/
+  netguard.sh               the whole privileged surface of the egress guard
 config/
   suite.json                committed: weights, default selection, default_limit
   local.json                gitignored: endpoints, harness paths
@@ -168,14 +174,19 @@ tests/                      pytest suite
 2. The unit runs through the Pi agent in a `bwrap` sandbox with a fixed
    task-neutral system prompt and thinking level `high`.
 3. The final assistant message is written to `$OUT_DIR/response.txt`.
-4. The unit's grader produces `(passed, detail)` **outside** the sandbox.
+4. The unit's grader produces `(passed, detail)` — `verify`/`code` graders may
+   themselves exec processes, so they run in their own `bwrap` (no network,
+   read-only task dir, scrubbed env); `mcq`/`exact`/`math`/`ifeval` are pure.
 5. The record is appended to `results/results.jsonl`; teardown runs.
 
 ### Contamination controls
 
-- Custom task directories are mounted read-only with `SOLUTION.md`,
-  `verify.py` and `teardown.sh` masked out with `/dev/null` — the model sees
-  only `prompt.md` and the task's shipped `resources/`.
+- Custom task directories are mounted **whitelist**-style read-only: only
+  `prompt.md` and the task's shipped `resources/` exist in the sandbox.
+  `SOLUTION.md`, `verify.py`, `teardown.sh`, `tests/` and any file added to the
+  directory later simply do not exist in there — they are not masked to
+  `/dev/null`, they are never at that path at all. Published tasks ship no
+  `meta.json` internals either; the prompt is the entire task view.
 - Sandbox `/home /tmp /run /var /opt /srv /mnt /media /boot` are fresh tmpfs
   mounts. Writable paths are only the task's scratch dir and `$OUT_DIR`, so the
   agent cannot read your home directory, model weights, or other tasks.
@@ -183,11 +194,13 @@ tests/                      pytest suite
   provider under test (your real registry — with every other provider's API
   key — is never mounted); `--no-session --no-extensions --no-skills
   --no-prompt-templates --no-themes --no-context-files`.
-- Published benchmark items get no task directory at all — just the prompt.
-- Outbound HTTP is pointed at a dead proxy with loopback exempted (see
-  **Sandboxing** below for exactly how strong that is).
+- Egress is **kernel-enforced**, not a proxy convention — see **Sandboxing**.
+  (The dead-proxy variables stay set as a second line of defence, but nothing
+  depends on the program choosing to honour them.)
 - Model-generated code (HumanEval+, MBPP+) is executed with no network
   (`bwrap --unshare-net`) and no view of the host filesystem.
+- Custom-task verifiers run the same way: their own `bwrap --unshare-net
+  --unshare-pid`, task dir read-only, scrubbed environment.
 
 ---
 
@@ -198,7 +211,7 @@ RNG — so the same response always grades the same way.
 
 | Grader | Used by | How it reads the answer |
 |---|---|---|
-| `verify` | custom tasks | runs the task's own `verify.py` against `$OUT_DIR` |
+| `verify` | custom tasks | runs the task's own `verify.py` in its own `bwrap` (no network, read-only task dir) |
 | `mcq` | MMLU, MMLU-Pro, GPQA, ARC, HellaSwag, WinoGrande, TruthfulQA | option letter from `FINAL: <letter>` |
 | `exact` | BBH | last line / `FINAL:`, normalised (case, articles, punctuation) |
 | `math` | MATH-500, GSM8K, AIME | `FINAL:` or `\boxed{}`; numeric compare first (`1/2` == `0.5`), normalised symbolic second |
@@ -240,49 +253,70 @@ The agent runs under `bwrap`. What is enforced:
 
 - **Filesystem.** `/home /tmp /run /var /opt /srv /mnt /media /boot` are fresh
   `tmpfs`, so the agent cannot see your home directory, model weights, other
-  tasks, or `config/local.json`. The task directory is a read-only bind with
-  `SOLUTION.md`, `verify.py` and `teardown.sh` masked to `/dev/null`. Writable
-  paths are only the task scratch dir and `$OUT_DIR`.
+  tasks, or `config/local.json`. The task directory is mounted **whitelist**:
+  `prompt.md` and the task's `resources/` are read-only binds; `SOLUTION.md`,
+  `verify.py`, `teardown.sh`, `tests/` and any future file simply do not exist
+  on the sandbox's filesystem. Writable paths are only the task scratch dir
+  and `$OUT_DIR`.
 - **Task view.** `--no-session --no-extensions --no-skills
   --no-prompt-templates --no-themes --no-context-files`, a fixed task-neutral
   system prompt, `PI_OFFLINE=1`. The only Pi state available is a **filtered**
   `models.json` containing just the provider under test — the real registry
   lists every provider you have configured, each carrying an API key, and none
   of the others are ever mounted.
+- **Process tree.** `--unshare-pid`, `--die-with-parent`, `--new-session`.
+  Timing out or interrupting the runner kills the whole process group; a
+  runner killed with SIGKILL is backstopped on the next run by clearing the
+  guard cgroup via `cgroup.kill`.
 - **Generated code.** HumanEval+/MBPP+ output runs under a *second* `bwrap`
   with `--unshare-net`, no host filesystem, a private tmpfs `/tmp`, and a
   180s wall clock.
 
-What is **not** kernel-enforced:
+What is **kernel-enforced about egress**, since the sandbox shares the host net:
 
 - **Egress from the agent itself.** The sandbox must share the host network —
   the model under test lives on `127.0.0.1`, and `bwrap --unshare-net` would
-  hand the agent a private loopback that cannot reach it. So outbound HTTP is
-  blocked *by convention*: `http_proxy`/`https_proxy`/`all_proxy` point at a
-  dead port while `no_proxy` carves out loopback, and `NODE_USE_ENV_PROXY=1`
-  makes Node's built-in `fetch` honour those variables (it ignores them by
-  default, and Pi is a Node app).
+  hand the agent a private loopback that cannot reach it. So enforcement moved
+  below the convention entirely: every sandbox process starts inside the
+  dedicated cgroup `localbench-sandbox`, and the `inet localbench_guard`
+  nftables table (installed once per boot) shapes its packets:
 
-  Measured from inside the real harness argv, against a host that *does* have
-  internet:
+    - *output hook* — the cgroup's loopback packets get mark `0x0b000000`,
+      loopback is otherwise passed through, and **every other packet it tries
+      to send is dropped** (raw sockets, UDP — anything);
+    - *input hook* — of those marked replies, only traffic to a configured
+      endpoint port or to a listener *inside the cgroup*, plus established
+      flows, is accepted; all other marked loopback traffic is dropped, so
+      foreign local services (DNS stub, another LLM, agent APIs) are
+      unreachable from the sandbox. Host packets themselves are never marked,
+      so none of this ever matches the host.
 
-  | probe | result | mechanism |
-  |---|---|---|
-  | `curl http://example.com` | blocked (`000`) | proxy → `ECONNREFUSED` |
-  | Python `urllib` | blocked (`URLError`) | proxy |
-  | Node `fetch` | blocked (`ECONNREFUSED`) | proxy, via `NODE_USE_ENV_PROXY` |
-  | `http://127.0.0.1:8105/health` | **200** | loopback stays reachable |
+    Entry is race-free: `scripts/netguard.sh` is installed with
+    `python3 -m localbench netguard install` once per boot, and each sandbox
+    starts via `sudo -n /usr/local/libexec/localbench-netguard exec-as` — a
+    root helper that enters the cgroup, drops to the invoking user with
+    `setpriv`, *then* execs the sandbox command. One narrow NOPASSWD
+    sudoers line, no setuid, no general sudo, and the helper can only ever
+    move itself.
 
-  Name resolution also fails inside the sandbox, but *incidentally*: `/run` is
-  a fresh `tmpfs`, and on systemd hosts `/etc/resolv.conf` is a symlink into
-  `/run/systemd/resolve/`. That will not hold on a host whose `resolv.conf` is
-  a plain file, so do not count on it.
+  `netguard verify` measures every direction:
 
-  **Raw sockets are not intercepted.** Treat this whole mechanism as an
-  anti-footgun, not a guarantee. If a hard guarantee matters for your eval, run
-  the job on a machine whose only route is to `127.0.0.1`. `localbench` invokes
-  `bwrap` unprivileged — no setuid helper, no `sudo`, no added capabilities —
-  so it composes with whatever network policy you apply outside it.
+  | probe (sandbox side) | result |
+  |---|---|
+  | → a configured endpoint port | **allowed** |
+  | → a service it started itself | **allowed** |
+  | → a foreign loopback service | blocked |
+  | → the internet | blocked |
+  | → the DNS stub | blocked |
+
+  …and from the host: foreign services, endpoint ports, internet untouched.
+  The guard survives a crashed runner: the next `run` clears whatever the
+  previous one left in the guard cgroup via `cgroup.kill`.
+
+- The dead-proxy environment variables (`http_proxy=127.0.0.1:9`, own-loopback
+  `no_proxy` carve-out, `NODE_USE_ENV_PROXY=1` so Node's built-in `fetch`
+  honours them) are still set as a second line of defence — with the kernel
+  rules they are belt-and-braces, not load-bearing.
 
 - **`/etc` is read-only but visible**, so the hostname and local username are
   readable. They never reach the published repo.
@@ -293,18 +327,24 @@ What is **not** kernel-enforced:
 
 | | Published? | Why |
 |---|---|---|
-| `prompt.md`, `meta.json`, `resources/`, `tests/` | yes | the benchmark itself — nobody can run or audit it otherwise |
-| `verify.py` | **yes** | a score nobody can audit is worthless; this is how MMLU/BBH/GPQA ship |
+| `prompt.md`, `meta.json`, `resources/`, `tests/generate.py`, `tests/check_replay.py` | yes | the benchmark definition |
+| `verify.py`, `teardown.sh` | **yes** | a score nobody can audit is worthless; this is how MMLU/BBH/GPQA ship. The model never sees them — whitelist mounts |
 | `SOLUTION.md` | **no** (gitignored) | the worked walkthrough is what actually removes the reasoning challenge |
+| `tests/expected.json`, `tests/vectors.json` | **no** (gitignored) | the graded answer keys; same withholding reason as `SOLUTION.md` — verifiers reference them, your local copy exists but is never committed |
+| `tests/exploit_reference.py` | **no** (gitignored) | a reference solver — same reason as `SOLUTION.md` |
 | `benchmarks/known/*/data/` | no (fetched) | licensing + repo size; `bench.json` records the upstream URL and licence |
 | `config/local.json` | no (gitignored) | endpoints, serve commands, your local paths |
 | `results/` | no (gitignored) | run artifacts |
 
-Note that the graders being public means the expected values for the custom
-tasks are visible in-repo. That is deliberate: they are the *output* of solving
-a problem stated in `prompt.md`, so anyone willing to read them could equally
-just solve it — while hiding them would make your scores unauditable. The model
-under test never sees them either way, because the sandbox masks them.
+Note that graders being public means their inputs are auditable. For tasks
+whose verifier embeds its rule (e.g. the vault-constraint arithmetic of
+`cybersecurity-ctf-502`, the token+work-hash chain of `cybersecurity-offsec-503`)
+anyone can re-check a verdict from the script alone. For tasks keyed on
+`tests/expected.json` / `tests/vectors.json` those key files are withheld
+alongside `SOLUTION.md`, so a reader must re-derive the answer to re-check a
+score — which is exactly the reasoning challenge in the first place. The
+model under test never sees any of it either way: whitelist mounts keep only
+`prompt.md` and `resources/` in the sandbox.
 
 Dataset licences are recorded per benchmark in `bench.json`; the datasets
 themselves are not redistributed. `localbench/vendor/ifeval/NOTICE` carries the

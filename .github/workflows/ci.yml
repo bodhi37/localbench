@@ -40,9 +40,8 @@ jobs:
 
       - name: No answer keys may ever ship
         run: |
-          if git ls-files | grep -q 'SOLUTION.md'; then
-            echo "::error::SOLUTION.md is tracked in git — it must stay gitignored"
-            git ls-files | grep 'SOLUTION.md'
+          if git ls-files | grep -E 'SOLUTION\.md|expected\.json|vectors\.json|exploit_reference\.py'; then
+            echo "::error::reference solutions / answer keys are tracked in git — they must stay gitignored"
             exit 1
           fi
           if find benchmarks -name 'SOLUTION.md' | grep -q .; then

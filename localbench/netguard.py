@@ -116,8 +116,10 @@ def _stamp_ok(ports: Optional[list[int]] = None) -> bool:
     if lines.get("version") != STAMP_VERSION:
         return False
     if ports is not None:
-        want = ",".join(str(p) for p in ports)
-        if lines.get("ports", "") != want:
+        want = sorted(str(p) for p in ports)
+        have_raw = lines.get("ports", "")
+        have = sorted(have_raw.split(",")) if have_raw else []
+        if have != want:
             return False
     sha = _script_sha()
     if not sha or lines.get("helper_sha") != sha:

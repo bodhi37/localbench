@@ -278,3 +278,128 @@ def test_verify_grades_a_real_custom_task(tmp_path):
     bad.mkdir()
     (bad / "response.txt").write_text("FINAL: batches=18 cost_cents=9215\n")
     assert not grade_verify(u, bad, (bad / "response.txt").read_text())[0]
+
+
+# --------------------------------------------------------------------------- #
+# regression cases: markdown emphasis, code suffix, run selection contract
+# --------------------------------------------------------------------------- #
+
+def test_mcq_markdown_emphasis_is_stripped():
+    assert grade_mcq(unit(answer="B"), Path("."),
+                     "thinking\nFINAL: **B**")[0]
+    assert grade_mcq(unit(answer="C"), Path("."),
+                     "hmm\n**Answer:** C")[0]
+    assert grade_mcq(unit(answer="A"), Path("."),
+                     "reasoning\nFinal answer: _A_")[0]
+
+
+def test_math_balanced_boxed_handles_nested_braces():
+    ok, _ = grade_math(unit(answer="1/2"), Path("."),
+                       r"so it is $\boxed{\frac{1}{2}}$")
+    assert ok
+    ok, _ = grade_math(unit(answer="17"), Path("."), r"so $\boxed{17}$")
+    assert ok
+
+
+def test_math_final_line_tolerates_bold_and_boxed():
+    assert grade_math(unit(answer="6"), Path("."), "FINAL: **6**")[0]
+    assert grade_math(unit(answer="42"), Path("."),
+                      r"FINAL: \boxed{42}")[0]
+
+
+def test_math_integral_gold_requires_exactness():
+    ok, _ = grade_math(unit(answer="1000000"), Path("."), "FINAL: 999999")
+    assert not ok
+    # identical integers in any accepted spelling still pass
+    assert grade_math(unit(answer="1000000"), Path("."),
+                      "FINAL: 1,000,000")[0]
+
+
+def test_math_non_integral_gold_keeps_relative_tolerance():
+    ok, _ = grade_math(unit(answer="3.14159"), Path("."), "FINAL: 3.14159")
+    assert ok
+
+
+def test_code_composition_strips_instruction_suffix():
+    from localbench.fetch import SUFFIX_CODE
+    prompt = ('def add(a, b):\n    """Add two numbers."""\n'
+              + SUFFIX_CODE)
+    ok, detail = grade_code(
+        unit(grader="code", prompt=prompt,
+             meta=dict(code_style="humaneval",
+                       test="assert add(1, 2) == 3")),
+        Path("."), "```python\n    return a + b\n```\n")
+    assert ok, detail
+
+
+def test_code_real_failure_detail_survives_broken_composition():
+    from localbench.fetch import SUFFIX_CODE
+    # the composed candidate is a SyntaxError by construction (trailing "x =");
+    # the self-contained program runs and its assert detail must win
+    prompt = ('def add(a, b):\n    """doc"""\n    x ='
+              + SUFFIX_CODE)
+    ok, detail = grade_code(
+        unit(grader="code", prompt=prompt,
+             meta=dict(code_style="humaneval",
+                       test="assert add(1, 2) == 3")),
+        Path("."), "```python\ndef add(a, b):\n    return a - b\n```\n")
+    assert not ok
+    assert "syntax error" not in detail.lower()
+
+
+class TestVerifySandbox:
+    def _u(self, tmp_path):
+        tdir = tmp_path / "task"
+        tdir.mkdir(exist_ok=True)
+        (tdir / "verify.py").write_text("import sys; print('{}')")
+        return unit(grader="verify", task_dir=tdir)
+
+    def test_policy_fails_closed_when_sandbox_missing(self, monkeypatch):
+        import localbench.config as cfg
+        import localbench.graders as g
+        monkeypatch.setattr(cfg, "harness_cfg", lambda: {"sandbox": True})
+        monkeypatch.setattr(g.shutil, "which", lambda name: None)
+        sandboxed, err = g._verify_policy()
+        assert not sandboxed and "bubblewrap" in err
+
+    def test_policy_sandboxed_when_config_and_bwrap(self, monkeypatch):
+        import localbench.config as cfg
+        import localbench.graders as g
+        monkeypatch.setattr(cfg, "harness_cfg", lambda: {"sandbox": True})
+        monkeypatch.setattr(g.shutil, "which",
+                            lambda name: "/usr/bin/bwrap")
+        assert g._verify_policy() == (True, "")
+
+    def test_policy_unsandboxed_when_config_unreadable(self, monkeypatch):
+        import localbench.config as cfg
+        import localbench.graders as g
+        def _boom():
+            from localbench.config import ConfigError
+            raise ConfigError("no config")
+        monkeypatch.setattr(cfg, "harness_cfg", _boom)
+        assert g._verify_policy() == (False, "")
+
+    def test_sandbox_argv_is_hermetic(self, monkeypatch, tmp_path):
+        import localbench.graders as g
+        monkeypatch.setattr(g.shutil, "which",
+                            lambda name: "/usr/bin/bwrap")
+        u = self._u(tmp_path)
+        argv, env = g._verify_argv(u, tmp_path / "out", tmp_path / "scratch",
+                                   True)
+        for flag in ("--unshare-net", "--unshare-pid", "--die-with-parent",
+                     "--new-session"):
+            assert flag in argv
+        binds = [(argv[i], argv[i + 1]) for i in range(len(argv) - 1)
+                 if argv[i] in ("--bind", "--ro-bind")]
+        for flag, src in binds:
+            if src == str(u.task_dir):
+                assert flag == "--ro-bind", "task dir must be read-only"
+        # task dir is read-only, out-dir is read-write
+        i = argv.index(str(u.task_dir))
+        assert argv[i - 1] == "--ro-bind"
+        i = argv.index(str(tmp_path / "out"))
+        assert argv[i - 1] == "--bind"
+        # environment is scrubbed, determinism pinned
+        assert set(env) == {"PATH", "HOME", "TMPDIR", "LANG", "LC_ALL",
+                            "TZ", "PYTHONHASHSEED"}
+        assert env["PYTHONHASHSEED"] == "0"

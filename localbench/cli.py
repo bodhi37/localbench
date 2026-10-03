@@ -168,8 +168,9 @@ def cmd_netguard(args) -> int:
     action = args.action or "status"
     if action == "status":
         st = netguard.status()
-        for k in ("enabled", "installed", "writable", "stamp_ports",
-                  "cgroup", "nft_table", "stamp", "script"):
+        for k in ("enabled", "installed", "stamp_ports",
+                  "helper", "sudoers", "cgroup", "nft_table",
+                  "stamp", "script"):
             print(f"{k:14} {st[k]}")
         if not st["installed"]:
             print("\nnot installed — `localbench netguard install` "

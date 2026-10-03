@@ -90,6 +90,29 @@ def test_latest_run_per_model_spans_models():
     assert latest_run_per_model(rows) == {"a": "r1", "b": "r2"}
 
 
+def test_select_defaults_to_newest_run_per_model_benchmark():
+    # run r2 has a newer math result for m, but m's code numbers only exist
+    # in r1 — selection must keep r1's code rows, not drop the whole run
+    rows = [rec("m", "u1", "math", False, run="r1"),
+            rec("m", "u2", "code", True, run="r1"),
+            rec("m", "u1", "math", True, run="r2"),
+            rec("n", "u1", "math", True, run="r1")]
+    sel = select(rows)
+    assert sorted((r["benchmark"], r["run_id"]) for r in sel) == [
+        ("code", "r1"), ("math", "r1"), ("math", "r2")]
+
+
+def test_select_falls_back_to_per_model_for_records_without_benchmark():
+    rows = [rec("m", "u", "b", False, run="r1"),
+            dict(run_id="r2", model="m", model_slug="m", uid=None,
+                 endpoint_failed=True, pass_=False, detail="boom")]
+    # r1's unit row is kept via the per-(model, benchmark) rule, and the
+    # benchmark-less endpoint-failure row via the per-model rule — dropping
+    # it would silently hide that the endpoint never came up
+    assert sorted(r["run_id"] for r in select(rows)) == ["r1", "r2"]
+    assert {r["run_id"] for r in select(rows, all_runs=True)} == {"r1", "r2"}
+
+
 def test_models_are_ranked_by_suite_score():
     rows = [rec("top", "1", "b", True), rec("top", "2", "b", True),
             rec("bot", "1", "b", False), rec("bot", "2", "b", True)]

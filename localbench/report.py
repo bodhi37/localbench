@@ -111,19 +111,27 @@ def build_report(structure: dict, info: Optional[dict] = None) -> str:
     A("- Every unit — hand-built task or published benchmark item — runs through "
       "the same agentic harness: the Pi agent in a `bwrap` sandbox, thinking "
       "level `high`, fixed task-neutral system prompt.")
-    A("- Contamination control: custom task directories are mounted read-only "
-      "with `SOLUTION.md`, `verify.py` and `teardown.sh` masked out; sandbox "
-      "`$HOME` is a scratch tmpfs holding only the provider registry; "
-      "`--no-session --no-extensions --no-skills --no-context-files`.")
+    A("- Contamination control: the task directory mounts whitelist-style, "
+      "read-only, so only `prompt.md` and `resources/` exist inside the "
+      "sandbox (`SOLUTION.md`, `verify.py`, `teardown.sh`, `tests/` are never "
+      "mounted); sandbox `$HOME` is a scratch tmpfs holding only the filtered "
+      "single-provider registry; `--no-session --no-extensions --no-skills "
+      "--no-context-files`.")
+    A("- Network: the agent's own egress is kernel-enforced via "
+      "nftables against a dedicated `localbench-sandbox` cgroup — every "
+      "non-allowed packet (internet, foreign local services, raw sockets) is "
+      "dropped; the host is never matched. Dead-proxy env vars remain as a "
+      "second line of defence. `python3 -m localbench netguard verify` "
+      "demonstrates the policy at install time.")
     A("- Graders are pure functions of the response text: `mcq`, `exact`, "
       "`math`, `code` (benchmark's own test suite, run without network), "
       "`ifeval` (vendored official Google checkers), or the custom task's own "
-      "`verify.py`.")
+      "`verify.py` run in its own `bwrap` (no network, read-only task dir).")
     A("- One model resident at a time: all conflicting server units are stopped "
       "and VRAM drained before each endpoint start; identity confirmed via "
       "`/v1/models` plus a 1-token warm completion.")
-    A("- Scores use the newest run per model unless `--run`/`--all-runs` says "
-      "otherwise.")
+    A("- Scores use the newest run per model per benchmark unless "
+      "`--run`/`--all-runs` says otherwise.")
     return "\n".join(lines) + "\n"
 
 

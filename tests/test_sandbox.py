@@ -84,23 +84,40 @@ class TestFilesystem:
         assert cmd.index(cfg["npm_global"]) > last_home_tmpfs, \
             "npm_global mount is shadowed by the /home tmpfs"
 
-    def test_answer_and_grader_are_masked(self, tmp_path):
+    def test_only_prompt_and_resources_are_visible(self, tmp_path):
+        """Whitelist mounts: anything outside TASK_VIEW does not exist."""
+        from localbench.harness import TASK_VIEW
         task = tmp_path / "task"
         task.mkdir()
-        cmd, _ = _build(tmp_path, unit=_unit(task_dir=task,
-                                             with_files=True))
-        mounts = {(src, dest) for _, src, dest in _binds_of(cmd)}
-        for hidden in ("SOLUTION.md", "verify.py", "teardown.sh"):
-            assert ("/dev/null", str(task / hidden)) in mounts, \
-                f"{hidden} is readable by the model"
-
-    def test_task_dir_is_a_read_only_bind(self, tmp_path):
-        task = tmp_path / "task"
-        task.mkdir()
-        (task / "prompt.md").write_text("hi")
+        (task / "resources").mkdir()
+        (task / "tests").mkdir()
+        for name in ("prompt.md", "SOLUTION.md", "verify.py", "teardown.sh"):
+            (task / name).write_text("x")
+        (task / "meta.json").write_text("{}")
         cmd, _ = _build(tmp_path, unit=_unit(task_dir=task))
-        assert ("--ro-bind", str(task)) in [(f, s) for f, s, _ in
-                                            _binds_of(cmd)]
+        sources = {src for _, src, _ in _binds_of(cmd)}
+        for name in TASK_VIEW:
+            assert str(task / name) in sources, f"{name} not mounted"
+        for hidden in ("SOLUTION.md", "verify.py", "teardown.sh", "meta.json",
+                       "tests"):
+            assert str(task / hidden) not in sources, f"{hidden} leaks into sandbox"
+        # no /dev/null mask-mounts
+        assert all(src != "/dev/null" for _, src, _ in _binds_of(cmd))
+        # the task dir itself is never bound wholesale
+        assert str(task) not in sources
+        # visible entries are mounted read-only
+        for flag, src, _ in _binds_of(cmd):
+            if src in {str(task / name) for name in TASK_VIEW}:
+                assert flag == "--ro-bind"
+
+    def test_unshare_pid_is_set(self, tmp_path):
+        cmd, _ = _build(tmp_path)
+        assert "--unshare-pid" in cmd
+
+    def test_die_with_parent_and_new_session(self, tmp_path):
+        cmd, _ = _build(tmp_path)
+        assert "--die-with-parent" in cmd
+        assert "--new-session" in cmd
 
     def test_real_models_registry_is_never_mounted(self, tmp_path):
         """The full registry carries every provider's API key."""
