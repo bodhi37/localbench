@@ -1,0 +1,17 @@
+{
+  "id": "bbh",
+  "name": "BIG-Bench Hard",
+  "grader": "exact",
+  "source": "https://github.com/suzgunmirac/BIG-Bench-Hard",
+  "license": "mit",
+  "about": "6511 items across 27 reasoning subtasks that defeat zero-shot models.",
+  "gated": false,
+  "timeout": 900,
+  "answer_format": "FINAL: <answer>",
+  "items": 6511,
+  "ingest": {
+    "builder": "localbench.fetch.build_bbh",
+    "shuffle_seed": 0,
+    "note": "data/items.jsonl is shuffled with shuffle_seed at ingest; the file order is the run order, so prefixes are stable."
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "id": "mmlu-pro",
+  "name": "MMLU-Pro",
+  "grader": "mcq",
+  "source": "https://huggingface.co/datasets/TIGER-Lab/MMLU-Pro",
+  "license": "mit",
+  "about": "12k hard ten-option questions across 14 disciplines.",
+  "gated": false,
+  "timeout": 900,
+  "answer_format": "FINAL: <letter>",
+  "items": 12032,
+  "ingest": {
+    "builder": "localbench.fetch.build_mmlu_pro",
+    "shuffle_seed": 0,
+    "note": "data/items.jsonl is shuffled with shuffle_seed at ingest; the file order is the run order, so prefixes are stable."
+  }
+}

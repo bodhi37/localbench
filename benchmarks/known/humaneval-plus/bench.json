@@ -1,0 +1,17 @@
+{
+  "id": "humaneval-plus",
+  "name": "HumanEval+",
+  "grader": "code",
+  "source": "https://huggingface.co/datasets/EvalPlus/HumanEvalPlus",
+  "license": "apache-2.0",
+  "about": "164 problems graded by EvalPlus's ~80x expanded test suites.",
+  "gated": false,
+  "timeout": 600,
+  "answer_format": "one fenced Python code block",
+  "items": 164,
+  "ingest": {
+    "builder": "localbench.fetch.build_humaneval_plus",
+    "shuffle_seed": 0,
+    "note": "data/items.jsonl is shuffled with shuffle_seed at ingest; the file order is the run order, so prefixes are stable."
+  }
+}

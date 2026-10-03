@@ -1,0 +1,20 @@
+{
+  "id": "science-cs-theory-103",
+  "domain": "science",
+  "capability": "cs-theory",
+  "tier": 3,
+  "runs": ["code"],
+  "expected_duration": "6-10",
+  "notes": "Isolates construction of a finite automaton for a pattern-avoidance language plus modular fast exponentiation; the n=10^9 query makes a linear DP infeasible, forcing a transfer matrix. Confound removed: no floating point, no library-specific algorithms, single explicit statement of contiguity and the empty-string base case. Tier 3: correct method (DFA over the last 3 characters + matrix power) required; several places to go wrong (missing short-suffix states, missing the length-4 pattern, wrong matrix orientation). Grading scope: final 'FINAL:' line, three non-negative residues. The (a, c) pair is a built-in consistency tripwire since c must equal a mod 97. False-positive audit: (a) a=533167110 (off-by-one), (b) c=14 (inconsistent count), (c) the 167-digit exact f(1000), (d) only two of three parts - all rejected. tests/vectors.json holds 13 exhaustive-enumeration vectors (n=0..12, n=0 and n=1..2 being the degenerate edges) and verify.py --selftest re-derives every shipped constant from scratch.",
+  "contamination_source": "original (pattern-avoidance counting is textbook; the pattern pair, the two moduli and the 10^9 query are bespoke)",
+  "validation_log": {
+    "step2_verifier_vs_solution": "pass (FINAL: a=533167111 b=451009448 c=15)",
+    "step2b_selftest": "pass - verify.py --selftest re-derives f(n) for n=0..12 by exhaustive enumeration, re-derives a and b by matrix power, and checks a mod 97 == c",
+    "step3_wrong_responses_rejected": "4/4 rejected (off-by-one a, inconsistent c, exact big integer, missing third part)",
+    "step4_cold_reread_ambiguity": "'contiguous substring', inclusive empty string, exact length n, non-negative remainder and the literal 1000000000 all stated explicitly",
+    "step5_self_contained_fresh_copy": "pass",
+    "step6_tier_and_duration": "tier 3, expected_duration 6-10",
+    "step7_staged": "pass"
+  },
+  "sandbox_exceptions": []
+}

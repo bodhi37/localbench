@@ -1,0 +1,17 @@
+{
+  "id": "truthfulqa-mc1",
+  "name": "TruthfulQA MC1",
+  "grader": "mcq",
+  "source": "https://huggingface.co/datasets/truthfulqa/truthful_qa",
+  "license": "cc-by-4.0",
+  "about": "817 questions probing whether a model repeats common misbeliefs.",
+  "gated": false,
+  "timeout": 600,
+  "answer_format": "FINAL: <letter>",
+  "items": 817,
+  "ingest": {
+    "builder": "localbench.fetch.build_truthfulqa_mc1",
+    "shuffle_seed": 0,
+    "note": "data/items.jsonl is shuffled with shuffle_seed at ingest; the file order is the run order, so prefixes are stable."
+  }
+}

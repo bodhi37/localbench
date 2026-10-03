@@ -1,0 +1,28 @@
+Vendored third-party component
+==============================
+
+instructions.py, instructions_util.py, instructions_registry.py
+---------------------------------------------------------------
+
+Project:  instruction_following_eval (IFEval official grader)
+Upstream: https://github.com/google-research/google-research/tree/master/instruction_following_eval
+Source:   https://raw.githubusercontent.com/google-research/google-research/master/instruction_following_eval/<file>
+Licence:  Apache License 2.0
+
+Copyright 2026 The Google Research Authors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use these files except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+Modifications: package-relative imports and an `absl.logging` shim only.
+The instruction-checking logic itself is unmodified, so IFEval scores remain
+comparable with published results.

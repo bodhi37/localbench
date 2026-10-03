@@ -1,0 +1,17 @@
+{
+  "id": "gsm8k",
+  "name": "GSM8K (test)",
+  "grader": "math",
+  "source": "https://huggingface.co/datasets/openai/gsm8k",
+  "license": "mit",
+  "about": "1319 grade-school word problems (official test split).",
+  "gated": false,
+  "timeout": 600,
+  "answer_format": "FINAL: <answer>",
+  "items": 1319,
+  "ingest": {
+    "builder": "localbench.fetch.build_gsm8k",
+    "shuffle_seed": 0,
+    "note": "data/items.jsonl is shuffled with shuffle_seed at ingest; the file order is the run order, so prefixes are stable."
+  }
+}

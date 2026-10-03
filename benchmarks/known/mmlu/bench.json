@@ -1,0 +1,17 @@
+{
+  "id": "mmlu",
+  "name": "MMLU",
+  "grader": "mcq",
+  "source": "https://huggingface.co/datasets/cais/mmlu",
+  "license": "mit",
+  "about": "14k four-option questions across 57 subjects (test split).",
+  "gated": false,
+  "timeout": 600,
+  "answer_format": "FINAL: <letter>",
+  "items": 14042,
+  "ingest": {
+    "builder": "localbench.fetch.build_mmlu",
+    "shuffle_seed": 0,
+    "note": "data/items.jsonl is shuffled with shuffle_seed at ingest; the file order is the run order, so prefixes are stable."
+  }
+}

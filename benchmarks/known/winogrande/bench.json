@@ -1,0 +1,17 @@
+{
+  "id": "winogrande",
+  "name": "WinoGrande XL",
+  "grader": "mcq",
+  "source": "https://huggingface.co/datasets/allenai/winogrande",
+  "license": "cc-by-4.0",
+  "about": "Winograd-style pronoun resolution, anti-bias set (validation).",
+  "gated": false,
+  "timeout": 600,
+  "answer_format": "FINAL: <letter>",
+  "items": 1267,
+  "ingest": {
+    "builder": "localbench.fetch.build_winogrande",
+    "shuffle_seed": 0,
+    "note": "data/items.jsonl is shuffled with shuffle_seed at ingest; the file order is the run order, so prefixes are stable."
+  }
+}

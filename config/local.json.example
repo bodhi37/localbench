@@ -1,0 +1,56 @@
+{
+  "_comment": "MACHINE-SPECIFIC CONFIG — gitignored. Copy to config/local.json and edit. local.json never gets committed.",
+
+  "harness": {
+    "_comment": "Paths on THIS machine only. Copy them from your own setup.",
+    "pi_tree": "/home/<you>/.local/share/pi-agent",
+    "pi_cli": "node/node_modules/@earendil-works/pi-coding-agent/dist/cli.js",
+    "models_json": "/home/<you>/.pi/agent/models.json",
+    "npm_global": "/home/<you>/.npm-global",
+    "sandbox": true,
+    "thinking": "high",
+    "block_network": true
+  },
+
+  "endpoints": [
+    {
+      "slug": "example-model-a",
+      "name": "Example Model A",
+      "provider": "example-local",
+      "model": "example-model-a",
+      "port": 8000,
+      "units": ["example-model-a.service"],
+      "serve_cmd": null,
+      "proc_kill": [],
+      "ready": 600
+    },
+    {
+      "slug": "example-model-b",
+      "name": "Example Model B",
+      "provider": "example-local",
+      "model": "example-model-b",
+      "port": 8001,
+      "units": [],
+      "serve_cmd": "/home/<you>/models/example/serve.sh",
+      "proc_kill": ["\\bft serve --model .*example-model-b"],
+      "ready": 420
+    },
+    {
+      "_comment": "external = already running and not managed by localbench: no start, no stop, no VRAM drain. Useful for a server you started yourself.",
+      "slug": "example-external",
+      "name": "Example External Server",
+      "provider": "example-local",
+      "model": "example-model-c",
+      "port": 8002,
+      "external": true,
+      "ready": 60
+    }
+  ],
+
+  "conflict_units": [
+    "example-model-a.service",
+    "example-model-b.service"
+  ],
+
+  "conflict_procs": ["\\bft serve --model "]
+}

@@ -1,0 +1,26 @@
+[project]
+name = "localbench"
+version = "0.1.0"
+description = "Benchmark local LLM endpoints against a hybrid suite of published and hand-crafted agentic tasks."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+# grading IFEval needs the official checkers' own dependencies
+dependencies = ["nltk>=3.8", "langdetect>=1.0.9", "immutabledict>=3.0.0"]
+
+[project.optional-dependencies]
+fetch = ["huggingface_hub>=0.20", "pandas>=2.0", "pyarrow>=15.0"]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+localbench = "localbench.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["localbench*"]
+
+[tool.setuptools.package-data]
+"localbench.vendor.ifeval" = ["NOTICE"]

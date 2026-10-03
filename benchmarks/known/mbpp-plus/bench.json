@@ -1,0 +1,17 @@
+{
+  "id": "mbpp-plus",
+  "name": "MBPP+",
+  "grader": "code",
+  "source": "https://huggingface.co/datasets/EvalPlus/mbppplus",
+  "license": "apache-2.0",
+  "about": "378 beginner-level problems graded by expanded test suites.",
+  "gated": false,
+  "timeout": 600,
+  "answer_format": "one fenced Python code block",
+  "items": 378,
+  "ingest": {
+    "builder": "localbench.fetch.build_mbpp_plus",
+    "shuffle_seed": 0,
+    "note": "data/items.jsonl is shuffled with shuffle_seed at ingest; the file order is the run order, so prefixes are stable."
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "id": "hellaswag",
+  "name": "HellaSwag",
+  "grader": "mcq",
+  "source": "https://huggingface.co/datasets/Rowan/hellaswag",
+  "license": "cc-by-4.0",
+  "about": "10k sentence-completion commonsense reasoning items (validation).",
+  "gated": false,
+  "timeout": 600,
+  "answer_format": "FINAL: <letter>",
+  "items": 10042,
+  "ingest": {
+    "builder": "localbench.fetch.build_hellaswag",
+    "shuffle_seed": 0,
+    "note": "data/items.jsonl is shuffled with shuffle_seed at ingest; the file order is the run order, so prefixes are stable."
+  }
+}

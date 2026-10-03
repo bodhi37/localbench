@@ -1,0 +1,26 @@
+# machine-specific config (endpoints, local paths) — never publish
+config/local.json
+
+# reference solutions — withheld so a reader can't skip the reasoning.
+# The graders (verify.py) ARE published: a benchmark is only credible if
+# anyone can audit how it scores. See README "What is and isn't published".
+benchmarks/custom/**/SOLUTION.md
+
+# benchmark datasets are fetched, not committed (licensing + repo size)
+benchmarks/known/*/data/
+
+# run artifacts
+results/*
+!results/.gitkeep
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+
+# reference exploits — task solutions withheld (see above for rationale)
+benchmarks/custom/**/exploit_reference.py
+benchmarks/custom/**/tests/expected.json
+benchmarks/custom/**/tests/vectors.json

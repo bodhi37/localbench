@@ -1,0 +1,19 @@
+{
+  "id": "science-chemistry-101",
+  "domain": "science",
+  "capability": "chemistry",
+  "tier": 1,
+  "runs": ["plain"],
+  "expected_duration": "1-3",
+  "notes": "Isolates stoichiometric proportioning under a supplied (not recalled) balanced equation and supplied molar masses. Confound removed: no equilibrium, limiting-reagent search, or concentration arithmetic beyond one multiplication. Tier 1: one linear pass, but two independent 3-dp answers so blind guessing is dead. Grading scope: only the final 'FINAL:' line; exactly 3 decimal places required. False-positive audit: (a) 5.611/17.426 (dropped the 2 in 2 KOH), (b) 11.222/9.808 (wrong molar mass for the product), (c) 11.22/17.43 (2 dp), (d) prose without the FINAL line - all rejected.",
+  "contamination_source": "original",
+  "validation_log": {
+    "step2_verifier_vs_solution": "pass (FINAL: koh_g=11.222 k2so4_g=17.426)",
+    "step3_wrong_responses_rejected": "4/4 rejected (ratio ignored, wrong molar mass, 2 dp, no FINAL line)",
+    "step4_cold_reread_ambiguity": "fixed: 'exactly the stoichiometric amount of KOH' replaced an earlier 'no excess of either reactant' phrasing that admitted a limiting-reagent reading",
+    "step5_self_contained_fresh_copy": "pass",
+    "step6_tier_and_duration": "tier 1, expected_duration 1-3",
+    "step7_staged": "pass"
+  },
+  "sandbox_exceptions": []
+}

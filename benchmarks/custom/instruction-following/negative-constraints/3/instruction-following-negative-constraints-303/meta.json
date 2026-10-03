@@ -1,0 +1,21 @@
+{
+  "id": "instruction-following-negative-constraints-303",
+  "domain": "instruction-following",
+  "capability": "negative-constraints",
+  "tier": 3,
+  "runs": ["plain"],
+  "expected_duration": "6-10",
+  "notes": "Isolates simultaneous negative constraints over a closed vocabulary: no E-bearing word, no repeated word, exactly one Z-bearing word per line, plus positive slots (TOPAZ/QUILL/MAROON) and a per-line first/last-initial rule. Confound removed: the vocabulary closes the output space, so gibberish and off-list words cannot pass, and no content judgement is involved. Tier 3: 38 of the 58 entries are E-free and exactly four E-free entries contain Z, so rule 5 forces those four one-per-line - a planner that picks words greedily tends to strand a Z-word; strong-model prior 40-70%. Grading is rule-checking, not equality with one witness, so any valid inscription passes and the verdict stays deterministic. False-positive audit: (a) an E-bearing entry used, (b) two Z-words on one line, (c) a repeated word, (d) a 6-word line, (e) an off-vocabulary gibberish word, (f) numbered lines, (g) missing TOPAZ - all rejected.",
+  "contamination_source": "original (constrained-writing exercise; vocabulary and rule set are bespoke)",
+  "validation_log": {
+    "step2_verifier_vs_solution": "pass (witness inscription satisfies rules 1-6)",
+    "step2b_verifier_not_overfit": "a second, independently generated valid inscription (seed search over a different construction) also passes, confirming rule-checking rather than witness matching",
+    "step2c_vocab_selftest": "verify.py --selftest confirms the embedded VOCAB mirror equals resources/vocabulary.txt (58 words, 20 E-bearing, exactly 4 E-free Z-words)",
+    "step3_wrong_responses_rejected": "7/7 rejected (E word, two Z-words on a line, repeated word, short line, gibberish, numbering, missing TOPAZ)",
+    "step4_cold_reread_ambiguity": "'copied exactly', single spaces, exactly 7 words, exactly one Z-word, and 'entire response' are all explicit",
+    "step5_self_contained_fresh_copy": "pass",
+    "step6_tier_and_duration": "tier 3, expected_duration 6-10",
+    "step7_staged": "pass"
+  },
+  "sandbox_exceptions": []
+}

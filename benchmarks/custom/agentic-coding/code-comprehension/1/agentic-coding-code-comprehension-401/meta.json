@@ -1,0 +1,20 @@
+{
+  "id": "agentic-coding-code-comprehension-401",
+  "domain": "agentic-coding",
+  "capability": "code-comprehension",
+  "tier": 1,
+  "runs": ["plain"],
+  "expected_duration": "1-3",
+  "notes": "Isolates tracing code that is in front of the solver and localising a single truncation-vs-floor defect. Confound removed: the file is 17 lines, dependency-free, and the only subtlety is int() truncating toward zero, so no other knowledge is needed. Tier 1: read a short program, compute six bucket keys, report the exact printed line plus the defect's 1-based line number; strong-model prior >= 90%. Two independent parts (exact string + line number) make guessing worthless. Grading scope: final 'FINAL:' line only. False-positive audit: (a) the floor-division output reported as the actual stdout, (b) fix_line=5 (the setdefault line), (c) fix_line=1 (the def line), (d) quoted stdout value, (e) prose with no FINAL line - all rejected.",
+  "contamination_source": "original (truncation-toward-zero is a language fact, not a sourced problem; the module, data and defect site are bespoke)",
+  "validation_log": {
+    "step2_verifier_vs_solution": "pass (FINAL: stdout=0:3,1:2,2:1 fix_line=4)",
+    "step2b_independent_confirmation": "executing resources/normalize.py prints 0:3,1:2,2:1; the v//width variant prints -1:1,0:2,1:2,2:1",
+    "step3_wrong_responses_rejected": "5/5 rejected (floor output, line 5, line 1, quoted value, no FINAL line)",
+    "step4_cold_reread_ambiguity": "'run as-is', '1-based line number', 'single statement' and 'no surrounding quotes' are all explicit",
+    "step5_self_contained_fresh_copy": "pass",
+    "step6_tier_and_duration": "tier 1, expected_duration 1-3",
+    "step7_staged": "pass"
+  },
+  "sandbox_exceptions": []
+}

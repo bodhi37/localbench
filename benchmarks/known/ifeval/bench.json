@@ -1,0 +1,17 @@
+{
+  "id": "ifeval",
+  "name": "IFEval",
+  "grader": "ifeval",
+  "source": "https://huggingface.co/datasets/google/ifeval",
+  "license": "cc-by-4.0",
+  "about": "541 verifiable instruction-following prompts (25 constraint types, official Google checkers).",
+  "gated": false,
+  "timeout": 900,
+  "answer_format": "prompt is used verbatim \u2014 no answer-format suffix",
+  "items": 541,
+  "ingest": {
+    "builder": "localbench.fetch.build_ifeval",
+    "shuffle_seed": 0,
+    "note": "data/items.jsonl is shuffled with shuffle_seed at ingest; the file order is the run order, so prefixes are stable."
+  }
+}

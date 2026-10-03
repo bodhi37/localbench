@@ -1,0 +1,17 @@
+{
+  "id": "gpqa-diamond",
+  "name": "GPQA Diamond",
+  "grader": "mcq",
+  "source": "https://huggingface.co/datasets/idavidrein/gpqa",
+  "license": "cc-by-4.0",
+  "about": "198 PhD-level science questions (diamond split). Gated: accept the terms on the dataset page and export HF_TOKEN.",
+  "gated": true,
+  "timeout": 900,
+  "answer_format": "FINAL: <letter>",
+  "items": 198,
+  "ingest": {
+    "builder": "localbench.fetch.build_gpqa_diamond",
+    "shuffle_seed": 0,
+    "note": "data/items.jsonl is shuffled with shuffle_seed at ingest; the file order is the run order, so prefixes are stable."
+  }
+}

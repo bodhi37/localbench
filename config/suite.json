@@ -1,0 +1,43 @@
+{
+  "_comment": "Suite definition: which benchmarks exist, how they are weighted, and what a bare `localbench run` picks up. Machine-specific paths and endpoints live in config/local.json (gitignored).",
+
+  "weights": {
+    "agentic-coding": 2.0,
+    "cybersecurity": 1.5,
+    "long-context": 1.5,
+    "instruction-following": 1.0,
+    "math": 1.5,
+    "science": 1.5,
+
+    "gpqa-diamond": 1.5,
+    "mmlu-pro": 1.5,
+    "mmlu": 0.75,
+    "arc-challenge": 0.75,
+    "hellaswag": 0.5,
+    "truthfulqa-mc1": 0.75,
+    "winogrande": 0.5,
+    "math-500": 1.5,
+    "gsm8k": 1.0,
+    "aime-2024": 1.5,
+    "humaneval-plus": 2.0,
+    "mbpp-plus": 1.5,
+    "ifeval": 1.0,
+    "bbh": 1.5
+  },
+
+  "default_benchmarks": [
+    "math", "science", "long-context", "instruction-following",
+    "agentic-coding", "cybersecurity",
+    "gpqa-diamond", "mmlu-pro", "math-500", "gsm8k", "aime-2024",
+    "humaneval-plus", "mbpp-plus", "ifeval", "bbh",
+    "arc-challenge", "mmlu", "truthfulqa-mc1", "hellaswag", "winogrande"
+  ],
+
+  "default_limit": 50,
+  "_default_limit_comment": "Items taken per known benchmark on a bare `localbench run`. Set 0 for the full datasets. Custom tasks are never limited. Override per run with --limit.",
+
+  "scoring": {
+    "suite_score": "weighted_mean_of_benchmark_accuracies",
+    "min_attempts_for_reporting": 1
+  }
+}

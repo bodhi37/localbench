@@ -1,0 +1,20 @@
+{
+  "id": "agentic-coding-implementation-403",
+  "domain": "agentic-coding",
+  "capability": "implementation",
+  "tier": 3,
+  "runs": ["code"],
+  "expected_duration": "6-10",
+  "notes": "Isolates implementing a precise written grammar: precedence, left associativity, repeatable unary minus, whitespace handling, exact unbounded-precision integers, truncating-toward-zero division, and a strict ValueError/ZeroDivisionError split. Confound removed: no I/O, no third-party libraries, no ambiguity about return type (an int, not a bool or float). Tier 3: correct method (recursive descent or an equivalent shunting-yard) required and the failure modes are independent - float division, floor division, missing trailing-input check, wrong exception type; strong-model prior 40-70%. Grading scope: $OUT_DIR/calc.py only, exercised over 40 fixed vectors (source: tests/vectors.json) in a subprocess with a scrubbed env and a 30s timeout; import-time output is a failure; results must be exact ints. False-positive audit: (a) float division, (b) floor division, (c) no trailing-input check, (d) ValueError instead of ZeroDivisionError, (e) missing file - all rejected.",
+  "contamination_source": "original (expression evaluation is a standard exercise; the operator set, division semantics, error contract, big-integer vectors and the 40-case matrix are bespoke)",
+  "validation_log": {
+    "step2_verifier_vs_solution": "pass (40/40 vectors)",
+    "step2b_reference_cross_check": "each vector's expectation was computed by an independent recursive-descent reference and re-validated before the vectors were frozen",
+    "step3_wrong_responses_rejected": "5/5 rejected (float division, floor division, no trailing-input check, wrong exception type, missing file)",
+    "step4_cold_reread_ambiguity": "left associativity, precedence, truncation direction with a worked example, ASCII-only digits, exact-int requirement, and the full ValueError list are all stated; four readings converge",
+    "step5_self_contained_fresh_copy": "pass (vectors live in tests/, harness-side)",
+    "step6_tier_and_duration": "tier 3, expected_duration 6-10",
+    "step7_staged": "pass"
+  },
+  "sandbox_exceptions": []
+}

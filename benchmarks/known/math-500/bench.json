@@ -1,0 +1,17 @@
+{
+  "id": "math-500",
+  "name": "MATH-500",
+  "grader": "math",
+  "source": "https://huggingface.co/datasets/HuggingFaceH4/MATH-500",
+  "license": "mit",
+  "about": "500 competition-math problems spanning all seven subjects.",
+  "gated": false,
+  "timeout": 1200,
+  "answer_format": "FINAL: <answer>",
+  "items": 500,
+  "ingest": {
+    "builder": "localbench.fetch.build_math_500",
+    "shuffle_seed": 0,
+    "note": "data/items.jsonl is shuffled with shuffle_seed at ingest; the file order is the run order, so prefixes are stable."
+  }
+}

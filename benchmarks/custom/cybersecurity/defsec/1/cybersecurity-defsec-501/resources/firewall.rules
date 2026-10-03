@@ -1,0 +1,22 @@
+# fields: rule_id action proto src_cidr dst_cidr dst_port
+# dst_port is either an integer or the token: any
+R01 accept tcp 10.4.0.0/24 10.9.0.0/16 443
+R02 accept tcp 10.4.0.0/24 10.9.0.0/16 80
+R03 reject tcp 0.0.0.0/0 0.0.0.0/0 23
+R04 accept udp 10.4.7.0/28 10.9.3.0/24 53
+R05 accept tcp 10.4.7.0/28 10.9.0.0/16 22
+R06 accept tcp 10.4.0.0/24 10.9.1.0/24 8080
+R07 accept tcp 192.168.5.0/24 10.9.2.0/24 8443
+R08 accept udp 0.0.0.0/0 10.9.4.0/24 123
+R09 accept tcp 172.16.0.0/12 10.9.0.0/16 3306
+R10 reject tcp 0.0.0.0/0 10.9.0.0/16 3307
+R11 reject tcp 10.4.0.0/24 10.9.0.0/16 22
+R12 accept udp 10.4.0.0/24 10.9.0.0/16 161
+R13 accept tcp 203.0.113.0/24 10.9.0.0/16 443
+R14 reject tcp 203.0.113.0/24 10.9.0.0/16 any
+R15 reject udp 10.4.0.0/24 10.9.0.0/16 any
+R16 reject tcp 10.4.0.0/16 10.9.0.0/16 any
+R17 accept tcp 10.4.9.0/24 10.9.5.0/24 9000
+R18 accept udp 10.4.7.0/28 10.9.7.0/24 514
+R19 accept tcp 198.51.100.0/24 10.9.6.0/24 2222
+R20 reject udp 0.0.0.0/0 10.9.4.0/24 any

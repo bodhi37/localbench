@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  test:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.10 is the declared floor; 3.14 is the newest CPython. The suite
+        # asserts on argv construction and needs no network, no datasets and
+        # no bubblewrap, so this job is deliberately self-contained.
+        python-version: ["3.10", "3.14"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install
+        run: pip install -e '.[fetch,dev]'
+
+      - name: Tests
+        run: pytest -q
+
+      - name: CLI smoke test
+        run: |
+          python -m localbench --version
+          python -m localbench --help
+          python -m localbench list
+          python -m localbench list --json > /dev/null
+
+      - name: No answer keys may ever ship
+        run: |
+          if git ls-files | grep -q 'SOLUTION.md'; then
+            echo "::error::SOLUTION.md is tracked in git — it must stay gitignored"
+            git ls-files | grep 'SOLUTION.md'
+            exit 1
+          fi
+          if find benchmarks -name 'SOLUTION.md' | grep -q .; then
+            echo "::error::SOLUTION.md present in the checkout — it must stay gitignored"
+            find benchmarks -name 'SOLUTION.md'
+            exit 1
+          fi
+          echo "ok: no reference solutions tracked or checked out"
+
+      - name: No machine-specific paths
+        run: |
+          if git ls-files -z | xargs -0 -r grep -lIE '/home/[a-z]|/Users/|C:\\\\Users' \
+               --exclude-dir=.git 2>/dev/null; then
+            echo "::error::absolute machine paths leaked into tracked files"
+            exit 1
+          fi
+          echo "ok: tracked files are machine-independent"

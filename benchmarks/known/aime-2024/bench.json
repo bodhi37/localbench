@@ -1,0 +1,17 @@
+{
+  "id": "aime-2024",
+  "name": "AIME 2024",
+  "grader": "math",
+  "source": "https://huggingface.co/datasets/HuggingFaceH4/aime_2024",
+  "license": "cc-by-4.0",
+  "about": "30 olympiad problems \u2014 a small, brutally hard numeric set.",
+  "gated": false,
+  "timeout": 1800,
+  "answer_format": "FINAL: <answer>",
+  "items": 30,
+  "ingest": {
+    "builder": "localbench.fetch.build_aime_2024",
+    "shuffle_seed": 0,
+    "note": "data/items.jsonl is shuffled with shuffle_seed at ingest; the file order is the run order, so prefixes are stable."
+  }
+}
