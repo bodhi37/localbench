@@ -3,18 +3,7 @@
 Benchmark **local LLM endpoints** against published academic benchmarks and
 hand-crafted agentic tasks, through one harness so the scores are comparable.
 
-```
-localbench list                         # what's in the suite
-localbench fetch                        # download published benchmarks
-localbench run --dry-run                # what would run, and how much
-localbench run --models my-model-a      # one model, default selection
-localbench score                        # suite score + per-benchmark table
-localbench score --bench bbh            # just one benchmark
-localbench report                       # results/REPORT.md + results.json
-```
-
-One model on the GPU at a time. A GPQA question and a multi-file debugging
-task go through the same Pi coding agent in a `bwrap` sandbox.
+All tasks share one sandboxed Pi harness — one model on the GPU at a time — making every score directly comparable.
 
 ---
 
@@ -54,8 +43,6 @@ localbench run --models my-model-a --bench math,bbh --limit 50
 localbench score
 localbench report
 ```
-
-`python3 -m localbench …` works the same without installing.
 
 ---
 
