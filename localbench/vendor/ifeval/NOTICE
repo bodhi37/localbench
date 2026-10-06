@@ -26,3 +26,6 @@ limitations under the License.
 Modifications: package-relative imports and an `absl.logging` shim only.
 The instruction-checking logic itself is unmodified, so IFEval scores remain
 comparable with published results.
+
+A full copy of the Apache License 2.0 is included at LICENSES/Apache-2.0.txt
+in this repository.

@@ -322,12 +322,19 @@ def wrap_argv(cfg: dict, argv: list[str]) -> list[str]:
     if not cfg.get("netguard", True):
         return list(argv)
     if not installed():
+        # endpoint_targets() needs config/local.json, which a fresh clone
+        # does not have yet — the guard hint must not crash with ConfigError
+        # instead of the intended fail-closed NetguardError.
+        try:
+            targets = endpoint_targets()
+        except ConfigError:
+            targets = []
         raise NetguardError(
             "kernel egress guard is not installed — refusing to run the "
             f"model without it. Fix once: sudo {SCRIPT} install "
             f"{getpass.getuser()} "
-            f"{','.join(str(p) for _, p in endpoint_targets())} "
-            f"{_targets_key(endpoint_targets())}"
+            f"{','.join(str(p) for _, p in targets)} "
+            f"{_targets_key(targets)}"
             f"  (or set \"netguard\": false in the harness section of "
             f"config/local.json to opt out)")
     return ["sudo", "-n", str(HELPER), "exec-as"] + list(argv)

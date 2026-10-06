@@ -252,6 +252,11 @@ def _append(rec: dict) -> None:
 def run(models: list[str], benchmarks: Optional[list[str]],
         tasks: Optional[list[str]], limit: int, dry_run: bool,
         keep_work: bool, run_id: Optional[str] = None) -> int:
+    try:
+        harness.refuse_root()
+    except RuntimeError as e:
+        print(f"FATAL: {e}", file=sys.stderr)
+        return 2
     local = load_local()
     endpoints = local["endpoints"]
     if models:
@@ -316,13 +321,19 @@ def run(models: list[str], benchmarks: Optional[list[str]],
             continue
 
         for i, unit in enumerate(units, 1):
-            out_dir = out_root / ep["slug"] / unit.benchmark / unit.ref
+            # ref/benchmark come from task meta.json and dataset rows — treat
+            # as untrusted path components so '../../' can never escape
+            # results/. work_dir already replaced '/' only; both now use the
+            # shared safe_component allowlist.
+            safe_bench = harness.safe_component(unit.benchmark)
+            safe_ref = harness.safe_component(unit.ref)
+            out_dir = out_root / ep["slug"] / safe_bench / safe_ref
             # a fresh unit must never be graded against the previous run's
             # leftovers in this (run-independent) directory
             shutil.rmtree(out_dir, ignore_errors=True)
             work_dir = (work_root /
-                        f"{ep['slug']}-{unit.ref.replace('/', '_')}-{make_run_id()}")
-            tr = transcripts / ep["slug"] / unit.benchmark / unit.ref
+                        f"{ep['slug']}-{safe_ref}-{make_run_id()}")
+            tr = transcripts / ep["slug"] / safe_bench / safe_ref
             tr.parent.mkdir(parents=True, exist_ok=True)
             print(f"  [{i}/{len(units)}] {unit.benchmark}/{unit.ref} "
                   f"({unit.grader}, cap {unit.timeout}s) ...", flush=True)
@@ -369,4 +380,12 @@ def run_unit_safe(unit: Unit, ep: dict, out_dir: Path, work_dir: Path,
             passed, detail = grade(unit, out_dir)
             rec["pass_"] = bool(passed)
             rec["detail"] = detail
+    # Grade detail is persisted to results.jsonl; scrub endpoint secrets in
+    # case the model echoed the apiKey into a graded artifact.
+    try:
+        secrets = harness.collect_secrets(ep, harness.harness_cfg())
+    except Exception:
+        secrets = set()
+    if secrets and isinstance(rec.get("detail"), str):
+        rec["detail"] = harness.scrub_text(rec["detail"], secrets)
     return rec

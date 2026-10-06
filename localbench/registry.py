@@ -17,6 +17,7 @@ a timeout, where to find its files, and how to grade it.
 from __future__ import annotations
 
 import json
+import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -26,6 +27,17 @@ from .config import CUSTOM_ROOT, KNOWN_ROOT, load_suite
 
 DEFAULT_TIMEOUT_S = 600
 MAX_TIMEOUT_S = 3600
+
+_REF_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
+
+
+def _check_ref(tid: str, where: Path) -> str:
+    """Task/item ids become path components in results/ — reject traversal."""
+    if not _REF_RE.match(tid or ""):
+        raise RuntimeError(
+            f"{where} has unsafe id {tid!r} "
+            f"(allowed: letters, digits, _ . - only)")
+    return tid
 
 
 @dataclass
@@ -81,6 +93,7 @@ def discover_custom() -> list[dict]:
         tid = meta.get("id")
         if not tid:
             raise RuntimeError(f"{meta_path} has no 'id'")
+        _check_ref(str(tid), meta_path)
         task_dir = meta_path.parent
         if not (task_dir / "prompt.md").is_file():
             raise RuntimeError(f"{task_dir} has no prompt.md")

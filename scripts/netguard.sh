@@ -335,6 +335,11 @@ cmd_exec_as() {
   [ "$#" -ge 1 ] || die "exec-as: no command given"
   [ -d "$CGROUP" ] || die "exec-as: guard cgroup $CGROUP missing — run: sudo $0 install <owner> <ports>"
   suid="${SUDO_UID:-}"
+  # Refuse to run the sandbox as root: with SUDO_UID empty (direct root
+  # invocation) or 0 there is no unprivileged uid to drop to, and the agent
+  # would run as host root inside bwrap. Run localbench as a normal user.
+  [ -n "$suid" ] || die "exec-as: refusing to run as root (no SUDO_UID) — run localbench as an unprivileged user"
+  [ "$suid" -ne 0 ] 2>/dev/null || die "exec-as: refusing to run as root (SUDO_UID=0) — run localbench as an unprivileged user"
   echo $$ > "$CGROUP/cgroup.procs" || die "exec-as: cannot enter $CGROUP"
   if [ -n "$suid" ] && [ "$suid" -ne 0 ] 2>/dev/null; then
     grp=$(id -g "$suid") || die "exec-as: unknown uid $suid"
@@ -344,7 +349,7 @@ cmd_exec_as() {
     export HOME="${home:-/}"
     exec setpriv --reuid "$suid" --regid "$grp" --init-groups "$@"
   fi
-  exec "$@"
+  die "exec-as: refusing to run as root — unreachable"
 }
 
 # --------------------------------------------------------------------------- #

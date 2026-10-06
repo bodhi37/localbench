@@ -122,6 +122,8 @@ def _verify_argv(unit, out_dir: Path, scratch: Path,
             "--ro-bind", "/etc", "/etc",
             "--dev", "/dev", "--proc", "/proc",
             "--tmpfs", "/tmp", "--tmpfs", "/home", "--tmpfs", "/var",
+            "--tmpfs", "/run", "--tmpfs", "/opt", "--tmpfs", "/srv",
+            "--tmpfs", "/mnt", "--tmpfs", "/media", "--tmpfs", "/boot",
             "--symlink", "usr/lib64", "/lib64"]
     for p in dict.fromkeys(x for x in (sys.prefix, sys.base_prefix) if x):
         if not p.startswith("/usr") and Path(p).is_dir():
@@ -576,8 +578,28 @@ def _sandbox_python_argv(scratch: Path, sandbox: bool = True) -> list[str]:
     argv += ["--die-with-parent", "--new-session",
              "--setenv", "PATH", "/usr/local/bin:/usr/bin:/bin",
              "--setenv", "HOME", str(scratch),
+             "--setenv", "TMPDIR", str(scratch),
+             "--setenv", "LANG", "C.UTF-8",
+             "--setenv", "LC_ALL", "C.UTF-8",
+             "--setenv", "TZ", "UTC",
+             "--setenv", "PYTHONHASHSEED", "0",
              "--", sys.executable]
     return argv
+
+
+def _code_env(scratch: Path) -> dict[str, str]:
+    """Scrubbed parent env for model-generated code.
+
+    Untrusted HumanEval/MBPP output must not inherit HF_TOKEN, API keys or
+    other operator-shell secrets via os.environ; exfil would persist as
+    grading detail. Mirrors the verifier env contract.
+    """
+    pybin = str(Path(sys.executable).parent)
+    return {"PATH": ":".join(dict.fromkeys(
+                [pybin, "/usr/local/bin", "/usr/bin", "/bin"])),
+            "HOME": str(scratch), "TMPDIR": str(scratch),
+            "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8", "TZ": "UTC",
+            "PYTHONHASHSEED": "0"}
 
 
 def _run_program(source: str, timeout: int, sandbox: bool = True) -> Result:
@@ -591,7 +613,7 @@ def _run_program(source: str, timeout: int, sandbox: bool = True) -> Result:
             proc = subprocess.Popen(
                 argv + [str(script)], stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE, text=True, cwd=scratch,
-                start_new_session=True)
+                start_new_session=True, env=_code_env(scratch))
         except OSError as e:
             return False, f"could not execute: {e}"
         try:

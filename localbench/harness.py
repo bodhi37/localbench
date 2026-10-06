@@ -13,6 +13,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -41,6 +42,109 @@ APPEND_SYSPROMPT = (
 
 TMPFS_TREES = ["/home", "/tmp", "/run", "/var", "/opt", "/srv",
                "/mnt", "/media", "/boot"]
+
+# Parent-process environment for anything that runs untrusted output.
+# bwrap --setenv only controls the sandbox interior; the Popen environ itself
+# is inherited from the operator shell unless env= is given, so HF_TOKEN,
+# cloud keys etc. would be readable via os.environ. Everything below uses
+# this allowlist instead of os.environ.
+PARENT_ENV_BASE = {
+    "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+    "LANG": "C.UTF-8",
+    "LC_ALL": "C.UTF-8",
+    "TZ": "UTC",
+}
+
+_SAFE_COMPONENT_RE = re.compile(r"[^A-Za-z0-9_.-]+")
+
+
+def safe_component(s: str) -> str:
+    """Make a string safe for use as a single path component.
+
+    Benchmark/ref names come from task meta.json and dataset rows; joining
+    them into results paths unsanitised lets '../../' escape results/.
+    """
+    s = str(s or "unnamed").strip().replace("/", "_")
+    s = _SAFE_COMPONENT_RE.sub("_", s).strip("._") or "unnamed"
+    return s[:120]
+
+
+def sandbox_parent_env() -> dict[str, str]:
+    """Minimal environment for spawning sandbox-adjacent processes."""
+    env = dict(PARENT_ENV_BASE)
+    # Repo discovery honours LOCALBENCH_ROOT; pass it through only when set,
+    # everything else from the operator shell stays behind.
+    root = os.environ.get("LOCALBENCH_ROOT")
+    if root:
+        env["LOCALBENCH_ROOT"] = root
+    return env
+
+
+def refuse_root() -> None:
+    """Refuse to run the harness as uid 0.
+
+    The netguard helper drops to SUDO_UID before exec; run as root there is
+    no uid to drop to and the agent would run as host root inside bwrap.
+    LOCALBENCH_ALLOW_ROOT=1 bypasses for containerised CI only.
+    """
+    if os.environ.get("LOCALBENCH_ALLOW_ROOT") == "1":
+        return
+    try:
+        euid = os.geteuid()
+    except AttributeError:
+        return  # non-POSIX: no uid concept to enforce
+    if euid == 0:
+        raise RuntimeError(
+            "refusing to run the harness as root (uid 0): the sandbox would "
+            "run as host root. Run as an unprivileged user; only the "
+            "netguard install/verify steps use sudo.")
+
+
+def collect_secrets(endpoint: dict, cfg: dict) -> set[str]:
+    """Secret values that must never persist in results/transcripts.
+
+    The agent needs the provider apiKey to talk to the endpoint, so it is
+    present in the sandbox models.json by design — but if the model echoes
+    it into response.txt or stdout, scrubbing below replaces it before
+    anything is written to results/.
+    """
+    secrets: set[str] = set()
+    for cand in (endpoint.get("api_key"),):
+        if cand:
+            secrets.add(str(cand))
+    try:
+        models_json = (cfg or {}).get("models_json")
+        if models_json:
+            reg = json.loads(Path(models_json).read_text(encoding="utf-8"))
+            prov = (reg.get("providers") or {}).get(endpoint.get("provider") or "")
+            key = (prov or {}).get("apiKey")
+            if key:
+                secrets.add(str(key))
+    except (OSError, ValueError):
+        pass
+    return {s for s in secrets if len(s) >= 4}
+
+
+def scrub_text(text: str, secrets: set[str]) -> str:
+    for s in secrets:
+        if s:
+            text = text.replace(s, "***REDACTED***")
+    return text
+
+
+def scrub_file(path: Path, secrets: set[str]) -> None:
+    if not secrets or not path.is_file():
+        return
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return
+    redacted = scrub_text(text, secrets)
+    if redacted != text:
+        try:
+            path.write_text(redacted, encoding="utf-8")
+        except OSError:
+            pass
 
 TASK_VIEW = ("prompt.md", "resources")
 """Whitelist: the only task-folder entries the sandbox ever mounts.
@@ -83,8 +187,17 @@ def _bwrap_cmd(cfg: dict, unit: Unit, out_dir: Path, work_dir: Path,
         # meta.json / tests/ / verify.py / teardown.sh / SOLUTION.md — and any
         # file a future edit adds — are never mounted, so they do not exist
         # inside the sandbox rather than merely being masked.
+        # Symlink guard: a resources -> /home/... entry would re-expose what
+        # the /home tmpfs hides, so a top-level symlink is never mounted.
         for name in TASK_VIEW:
             entry = task_dir / name
+            try:
+                if entry.is_symlink():
+                    print(f"  WARNING: skipping symlink mount {entry} "
+                          f"(points outside task view)", file=sys.stderr)
+                    continue
+            except OSError:
+                continue
             if entry.exists():
                 cmd += ["--ro-bind", str(entry), str(entry)]
     cmd += [
@@ -115,6 +228,12 @@ def write_models_shim(source: Path, provider: str, home: Path) -> Path:
     invoked with ``--provider <one>``, so a single-entry registry is all it can
     ever use.
 
+    The active provider's own apiKey IS copied (the agent needs it to reach
+    the endpoint). Use a dummy local-only key for the provider under test —
+    see SECURITY.md — and assume anything in this file is visible to the
+    model: run_unit scrubs these values from persisted transcripts/results,
+    but they are readable inside the sandbox by design.
+
     Lives at ``$HOME/.pi/agent/models.json`` inside ``work_dir``, which the
     sandbox already binds — no bind of the real registry is ever mounted.
     """
@@ -136,17 +255,19 @@ def write_models_shim(source: Path, provider: str, home: Path) -> Path:
 
 
 def _network_env(cfg: dict, extra_no_proxy: tuple = ()) -> list[str]:
-    """Keep the sandbox off the public internet while leaving loopback alone.
+    """Belt-and-braces proxy block for well-behaved HTTP clients.
 
     The sandbox MUST share the host network namespace — the model under test
     lives on 127.0.0.1 (or a configured ``host``), and ``bwrap --unshare-net``
-    would give it a private loopback that cannot reach the host. So egress is blocked by pointing every
-    well-behaved HTTP client at a dead proxy, with ``no_proxy`` carved out for
-    loopback so the endpoint stays reachable.
+    would give it a private loopback that cannot reach the host. Kernel-level
+    enforcement therefore lives in the netguard nftables guard (see README
+    "Sandboxing" and localbench/netguard.py): every sandbox process starts
+    inside the ``localbench-sandbox`` cgroup via the root attach helper, and
+    non-endpoint egress is dropped by the kernel for every protocol.
 
-    This stops curl / wget / python requests / urllib from fetching answers.
-    It is NOT a kernel-level guarantee: raw sockets are not intercepted. See
-    README "Sandboxing" for the honest limits.
+    These proxy variables are the *second* line of defence for clients that
+    honour them (curl / wget / python requests / Node fetch with
+    NODE_USE_ENV_PROXY=1). Nothing depends on them alone.
     """
     if not cfg.get("block_network", True):
         return []
@@ -246,7 +367,9 @@ def _kill_sandbox(proc: subprocess.Popen) -> None:
 def run_unit(unit: Unit, endpoint: dict, out_dir: Path, work_dir: Path,
              transcript: Path, timeout: int, keep_work: bool = False) -> dict:
     """Execute one unit. Returns a record with execution stats; *not* graded."""
+    refuse_root()
     cfg = harness_cfg()
+    secrets = collect_secrets(endpoint, cfg)
     res = dict(
         uid=unit.uid, ref=unit.ref, suite=unit.suite, benchmark=unit.benchmark,
         grader=unit.grader, kind=unit.kind,
@@ -276,9 +399,13 @@ def run_unit(unit: Unit, endpoint: dict, out_dir: Path, work_dir: Path,
     # enters the guard cgroup *before* exec (raises here, in the parent, if
     # the guard is enabled but not installed)
     cmd = netguard.wrap_argv(cfg, cmd)
+    # Scrubbed parent env: the model process must not inherit HF_TOKEN,
+    # cloud keys etc. from the operator shell via os.environ. The sandbox
+    # interior env is fixed by _bwrap_cmd --setenv above.
     proc = subprocess.Popen(
         cmd, stdin=subprocess.PIPE, stdout=open(ndjson, "wb"),
-        stderr=open(errf, "wb"), start_new_session=True)
+        stderr=open(errf, "wb"), start_new_session=True,
+        env=sandbox_parent_env())
     try:
         proc.communicate(unit.prompt.encode("utf-8"), timeout=timeout)
         res["rc"] = proc.returncode
@@ -300,18 +427,73 @@ def run_unit(unit: Unit, endpoint: dict, out_dir: Path, work_dir: Path,
     if not res["timed_out"]:
         _parse_transcript(ndjson, out_dir, res)
 
+    # The model can echo the endpoint apiKey into response/transcript; it is
+    # readable inside the sandbox by design, but must not persist to disk.
+    if secrets:
+        for p in (out_dir / "response.txt", ndjson, errf):
+            try:
+                scrub_file(p, secrets)
+            except OSError:
+                pass
+        for k in ("detail", "error"):
+            if isinstance(res.get(k), str):
+                res[k] = scrub_text(res[k], secrets)
+
     if not keep_work:
         shutil.rmtree(work_dir, ignore_errors=True)
     return res
 
 
+def _teardown_argv(script: Path, task_dir: Path) -> tuple[list[str], dict[str, str]]:
+    """Teardown runs with no network and a scrubbed environment.
+
+    Teardowns are trusted operator code (shipped task hooks that kill a
+    loopback service and remove __pycache__), not model output — but they
+    still run after an untrusted agent, so they get the same treatment as
+    verifiers: --unshare-net, minimal env, timeout. The host pid namespace
+    is deliberately kept so `pkill -f relay.py` can reach the task service;
+    the filesystem binds are still minimal (task dir + /usr + /etc).
+    """
+    env = {"PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+           "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8", "TZ": "UTC",
+           "TASK_DIR": str(task_dir)}
+    if not shutil.which("bwrap"):
+        return ["/bin/sh", str(script)], env
+    argv = [shutil.which("bwrap") or "bwrap",
+            "--unshare-net",
+            "--ro-bind", "/usr", "/usr",
+            "--ro-bind", "/etc", "/etc",
+            "--dev", "/dev", "--proc", "/proc",
+            "--tmpfs", "/tmp", "--tmpfs", "/home", "--tmpfs", "/var",
+            "--bind", str(task_dir), str(task_dir),
+            "--die-with-parent", "--new-session",
+            "--chdir", str(task_dir)]
+    for k, v in env.items():
+        argv += ["--setenv", k, v]
+    return argv + ["--", "/bin/sh", str(script)], env
+
+
 def teardown(unit: Unit) -> None:
-    """Run a custom task's teardown hook, if it has one."""
+    """Run a custom task's teardown hook, if it has one.
+
+    Trusted hook, untrusted context: scrubbed env, no network, 60s timeout.
+    Review task PRs — a merged teardown runs as your user on every run.
+    """
     if unit.task_dir is None:
         return
     script = unit.task_dir / "teardown.sh"
-    if script.is_file():
-        try:
-            subprocess.run(["/bin/sh", str(script)], capture_output=True, timeout=60)
-        except (subprocess.TimeoutExpired, OSError):
-            pass
+    if not script.is_file():
+        return
+    try:
+        if script.is_symlink():
+            print(f"  WARNING: skipping symlink teardown {script}",
+                  file=sys.stderr)
+            return
+    except OSError:
+        return
+    try:
+        argv, env = _teardown_argv(script, unit.task_dir)
+        subprocess.run(argv, capture_output=True, timeout=60, env=env,
+                       cwd=unit.task_dir, start_new_session=True)
+    except (subprocess.TimeoutExpired, OSError):
+        pass

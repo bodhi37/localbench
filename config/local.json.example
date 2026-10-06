@@ -8,8 +8,10 @@
     "models_json": "/home/<you>/.pi/agent/models.json",
     "npm_global": "/home/<you>/.npm-global",
     "sandbox": true,
+    "netguard": true,
     "thinking": "high",
-    "block_network": true
+    "block_network": true,
+    "_security": "The provider under test is copied (single entry) into the sandbox so the agent can reach it — use a dummy local-only apiKey there, never a production key. Never run localbench as root. See SECURITY.md."
   },
 
   "endpoints": [

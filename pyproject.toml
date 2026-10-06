@@ -1,10 +1,21 @@
 [project]
 name = "localbench"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Benchmark local LLM endpoints against a hybrid suite of published and hand-crafted agentic tasks."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
+keywords = ["benchmark", "llm", "evaluation", "agents", "sandbox"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+urls = { Homepage = "https://github.com/bodhi37/localbench", Repository = "https://github.com/bodhi37/localbench", Issues = "https://github.com/bodhi37/localbench/issues" }
 # grading IFEval needs the official checkers' own dependencies
 dependencies = ["nltk>=3.8", "langdetect>=1.0.9", "immutabledict>=3.0.0"]
 
@@ -19,8 +30,14 @@ localbench = "localbench.cli:main"
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools.dynamic]
+version = { attr = "localbench.__version__" }
+
 [tool.setuptools.packages.find]
 include = ["localbench*"]
 
 [tool.setuptools.package-data]
 "localbench.vendor.ifeval" = ["NOTICE"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
