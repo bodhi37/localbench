@@ -8,7 +8,7 @@
   "notes": "Isolates simultaneous congruences (CRT) plus a bounded-range count that punishes off-by-one. Confound removed: no primality, no factoring; everything is explicit modular arithmetic on 7/11/13. Tier 2: two chained CRT merges then a counting step; strong-model prior 70-90%. Runs=code because a calculator removes arithmetic slips and keeps the target skill (setting up the congruences and the range count) clean. Grading scope: final 'FINAL:' line only. False-positive audit: (a) -732 (least-magnitude residue), (b) count 499 (off-by-one), (c) count 1 / first 3 (only one congruence), (d) answer hidden in prose - all rejected.",
   "contamination_source": "original (textbook CRT method, task surface, moduli, offsets and range are bespoke)",
   "validation_log": {
-    "step2_verifier_vs_solution": "pass (FINAL: first=269 count=500)",
+    "step2_verifier_vs_solution": "pass (withheld: re-derive the answer from prompt.md; the worked solution lives in gitignored SOLUTION.md)",
     "step3_wrong_responses_rejected": "3/3 rejected (-732, count=499, first=3/count=1)",
     "step4_cold_reread_ambiguity": "explicit 'positive integer instants', explicit inclusive 1..500000 range, explicit non-negative moduli; four readings converge",
     "step5_self_contained_fresh_copy": "pass",

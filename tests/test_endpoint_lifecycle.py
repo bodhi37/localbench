@@ -291,8 +291,67 @@ def test_wait_ready_accepts_a_sole_model_reporting_a_different_id(env,
 
     monkeypatch.setattr(runner.urllib.request, "urlopen",
                         lambda *a, **k: _Resp())
-    monkeypatch.setattr(runner, "_endpoint_warm", lambda ep: True)
+    monkeypatch.setattr(runner, "_endpoint_warm", lambda ep, host=None, key=None: True)
     ok, msg, reported = runner.wait_ready(dict(env.ep, model="logical-name"),
                                           env.log)
     assert ok, msg
     assert reported == "/models/some.gguf"
+
+
+# --------------------------------------------------------------------------- #
+# non-loopback endpoints + bearer auth
+# --------------------------------------------------------------------------- #
+
+def test_ep_host_defaults_to_loopback():
+    from localbench.config import ep_host
+    assert ep_host({}) == "127.0.0.1"
+    assert ep_host({"host": None}) == "127.0.0.1"
+    assert ep_host({"host": "192.0.2.7"}) == "192.0.2.7"
+
+
+def test_endpoint_key_prefers_explicit_api_key():
+    assert runner._endpoint_key({"api_key": "k"}, {}) == "k"
+
+
+def test_endpoint_key_falls_back_to_provider_registry(tmp_path):
+    reg = tmp_path / "models.json"
+    reg.write_text(json.dumps(
+        {"providers": {"p": {"apiKey": "reg-key"}}}), encoding="utf-8")
+    local = {"harness": {"models_json": str(reg)}}
+    assert runner._endpoint_key({"provider": "p"}, local) == "reg-key"
+    assert runner._endpoint_key({"provider": "missing"}, local) is None
+    assert runner._endpoint_key({"provider": "p"}, {}) is None
+
+
+def test_wait_ready_sends_bearer_key_when_configured(env, monkeypatch):
+    """An endpoint behind auth must see Authorization on both probes."""
+    seen = []
+
+    class _Resp:
+        def __init__(self, body):
+            self.body = body
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return self.body
+
+        @property
+        def status(self):
+            return 200
+
+    def fake_urlopen(req, **kw):
+        seen.append(req.get_header("Authorization"))
+        if req.full_url.endswith("/v1/models"):
+            return _Resp(json.dumps({"data": [{"id": MODEL}]}).encode())
+        return _Resp(b"{}")
+
+    monkeypatch.setattr(runner.urllib.request, "urlopen", fake_urlopen)
+    ok, msg, _ = runner.wait_ready(dict(env.ep, model=MODEL), env.log,
+                                   key="s3cret")
+    assert ok, msg
+    assert seen and all(h == "Bearer s3cret" for h in seen), seen

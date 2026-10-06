@@ -403,3 +403,45 @@ class TestVerifySandbox:
         assert set(env) == {"PATH", "HOME", "TMPDIR", "LANG", "LC_ALL",
                             "TZ", "PYTHONHASHSEED"}
         assert env["PYTHONHASHSEED"] == "0"
+
+
+def test_math_explicit_final_beats_boxed():
+    from localbench.registry import Unit
+    u = Unit(uid="x", suite="known", benchmark="b", kind="item", ref="0",
+             prompt="p", timeout=60, grader="math", task_dir=None,
+             answer="18", meta={})
+    ok, _ = grade_math(u, Path("."), "FINAL: 18\nreasoning $\\boxed{17}$")
+    assert ok
+    u2 = Unit(uid="x", suite="known", benchmark="b", kind="item", ref="0",
+              prompt="p", timeout=60, grader="math", task_dir=None,
+              answer="17", meta={})
+    ok, _ = grade_math(u2, Path("."), "FINAL: 18\nreasoning $\\boxed{17}$")
+    assert not ok
+
+
+def test_code_empty_response_fails():
+    from localbench.registry import Unit
+    u = Unit(uid="x", suite="known", benchmark="b", kind="item", ref="0",
+             prompt="p", timeout=60, grader="code", task_dir=None,
+             answer=None, meta={"test": "assert True"})
+    assert grade_code(u, Path("."), "   \n")[0] is False
+
+
+def test_code_policy_fails_closed_without_bwrap(monkeypatch):
+    import localbench.config as cfg
+    import localbench.graders as g
+    monkeypatch.setattr(cfg, "harness_cfg", lambda: {"sandbox": True})
+    monkeypatch.setattr(g.shutil, "which", lambda name: None)
+    sandboxed, err = g._code_policy()
+    assert not sandboxed and "bubblewrap" in err
+
+
+def test_mcq_explicit_final_beats_later_bare_correction():
+    # Prompts demand the answer end with FINAL: and nothing after it; text
+    # after that line violates the instruction, so the stated FINAL: wins.
+    from localbench.registry import Unit
+    u = Unit(uid="x", suite="known", benchmark="b", kind="item", ref="0",
+             prompt="p", timeout=60, grader="mcq", task_dir=None,
+             answer="B", meta={})
+    ok, detail = grade_mcq(u, Path("."), "FINAL: B\nI pick A")
+    assert ok and "B" in detail

@@ -17,6 +17,7 @@ a timeout, where to find its files, and how to grade it.
 from __future__ import annotations
 
 import json
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterator, Optional
@@ -204,6 +205,10 @@ def load_units(benchmarks: Optional[list[str]] = None,
     unknown = [b for b in wanted if b not in {d["benchmark"] for d in specs}]
     if unknown and not known_present and not specs:
         raise RuntimeError(f"no benchmarks matched {unknown}")
+    if unknown:
+        # A typo next to a valid name must not silently narrow the run.
+        print(f"WARNING: unknown benchmark(s) ignored: {unknown}",
+              file=sys.stderr)
 
     units: list[Unit] = []
     for d in specs:

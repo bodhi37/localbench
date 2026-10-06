@@ -1,9 +1,14 @@
 #!/bin/bash
 # localbench netguard — the entire privileged surface of the egress guard.
 #
-#   install  <owner> <ports>   (re)build the guard cgroup + nftables rules,
+#   install  <owner> <ports> <targets>
+#                              (re)build the guard cgroup + nftables rules,
 #                              install the attach helper + sudoers entry,
 #                              then prove they enforce what they claim
+#                              ports   = comma-separated loopback ports
+#                              targets = comma-separated host:port allowlist
+#                                        (literal IPv4; loopback entries are
+#                                        already covered by the ports set)
 #   uninstall                  remove rules, helper, sudoers, stamp, cgroup
 #   status                     report; exit 0 only when fully installed
 #   verify   <ports>           behavioural self-test of the installed guard
@@ -32,6 +37,8 @@
 #   output hook
 #     1. loopback packets *sent by the guard cgroup* get mark 0x0b000000
 #     2. loopback is passed through (tasks and the endpoint live there)
+#     2b. configured non-loopback endpoint targets (a Tailscale/LAN server)
+#         get one explicit accept each: that IPv4 host, that TCP port
 #     3. every other packet from the guard cgroup is dropped
 #        -> the internet, other hosts, other interfaces, raw sockets, UDP, ...
 #   input hook — only marked packets are ever considered, i.e. only packets
@@ -55,7 +62,7 @@ CGROUP_NAME=localbench-sandbox          # must equal CGROUP's basename: rule key
 TABLE=localbench_guard
 MARK=0x0b000000                         # bits 24-31: no host subsystem uses them
 STAMP=/run/localbench-netguard.stamp
-VERSION=2
+VERSION=3
 HELPER=/usr/local/libexec/localbench-netguard
 SUDOERS=/etc/sudoers.d/localbench-netguard
 SELF=$(readlink -f "$0" 2>/dev/null || printf '%s' "$0")
@@ -65,6 +72,25 @@ need_root() { [ "$(id -u)" = 0 ] || die "must run as root (sudo $0 ...)"; }
 
 valid_owner() { case "${1:-}" in ""|*[!A-Za-z0-9_.-]*) return 1;; *) return 0;; esac; }
 valid_ports() { case "${1:-}" in *[!0-9,]*) return 1;; *) return 0;; esac; }
+valid_targets() {
+  # comma-separated host:port, literal IPv4 hosts only: DNS is blocked inside
+  # the sandbox by design, so a hostname could never resolve there anyway
+  local t h p rest=${1:-}
+  [ -z "$rest" ] && return 0
+  case "$rest" in *[!0-9A-Za-z.,:_-]*) return 1;; esac
+  while [ -n "$rest" ]; do
+    t=${rest%%,*}; rest=${rest#"$t"}; rest=${rest#,}
+    h=${t%:*}; p=${t##*:}
+    [ -n "$h" ] && [ -n "$p" ] && [ "$h" != "$t" ] || return 1
+    case "$h" in 127.0.0.1|"::1"|localhost) ;;
+      *.*.*.*) case "$h" in *[!0-9.]*) return 1;; esac;;
+      *) return 1;;
+    esac
+    case "$p" in *[!0-9]*|"") return 1;; esac
+    [ "$p" -ge 1 ] 2>/dev/null && [ "$p" -le 65535 ] 2>/dev/null || return 1
+  done
+  return 0
+}
 
 stamp_version_ok() { [ -f "$STAMP" ] && grep -qx "version=$VERSION" "$STAMP"; }
 
@@ -75,15 +101,28 @@ stamp_version_ok() { [ -f "$STAMP" ] && grep -qx "version=$VERSION" "$STAMP"; }
 write_rules() {
   # ports arrive as a comma-separated list: nft set literals need commas
   # between elements (a single element is fine either way)
-  local ports="$1"
+  local ports="$1" targets="${2:-}"
   [ -n "$ports" ] || ports=0
+  # Non-loopback targets get one explicit accept each (that host, that TCP
+  # port). Loopback is already covered by the oifname rules; anything not
+  # listed still falls through to the cgroup drop. Replies need no rule:
+  # unmarked non-loopback input is accepted by chain policy, and a flow can
+  # only exist if its SYN passed one of these accepts.
+  local extras="" t h p
+  for t in ${targets//,/ }; do
+    [ -n "$t" ] || continue
+    h=${t%:*}; p=${t##*:}
+    case "$h" in 127.0.0.1|"::1"|localhost|"") continue;; esac
+    extras="${extras}		socket cgroupv2 level 1 \"$CGROUP_NAME\" ip daddr $h tcp dport $p accept
+"
+  done
   cat <<EOF
 table inet $TABLE {
 	chain out {
 		type filter hook output priority filter; policy accept;
 		oifname "lo" socket cgroupv2 level 1 "$CGROUP_NAME" meta mark set $MARK
 		oifname "lo" accept
-		socket cgroupv2 level 1 "$CGROUP_NAME" counter drop
+${extras}		socket cgroupv2 level 1 "$CGROUP_NAME" counter drop
 	}
 	chain in {
 		type filter hook input priority filter; policy accept;
@@ -103,32 +142,66 @@ EOF
 tcp_open() { timeout 1 bash -c "exec 3<>/dev/tcp/$1/$2" 2>/dev/null; }
 
 free_port() {
-  python3 - <<'EOF'
-import socket
+  free_port_on 127.0.0.1
+}
+
+free_port_on() { # $1=ip -> a free TCP port on that address
+  python3 - "$1" <<'EOF'
+import socket, sys
 s = socket.socket()
-s.bind(("127.0.0.1", 0))
+s.bind((sys.argv[1], 0))
 print(s.getsockname()[1])
 s.close()
 EOF
 }
 
 pick_port() { # a free port that is not one of the guarded endpoint ports
-  local p i=0
+  pick_port_on 127.0.0.1 "$1"
+}
+
+pick_port_on() { # $1=ip $2=csv-ports-to-avoid
+  local ip=$1 avoid=$2 p i=0
   while [ "$i" -lt 20 ]; do
-    p=$(free_port) || return 1
-    case ",$1," in *",$p,"*) i=$((i + 1)); continue;; esac
+    p=$(free_port_on "$ip") || return 1
+    case ",$avoid," in *",$p,"*) i=$((i + 1)); continue;; esac
     printf '%s\n' "$p"
     return 0
   done
   return 1
 }
 
-start_listener() { # $1=port -> prints pid; fails unless it is really listening
-  local port=$1 pid i
-  python3 -m http.server "$port" --bind 127.0.0.1 >/dev/null 2>&1 &
+start_listener() { # $1=port [$2=bind-ip] -> prints pid; fails unless listening
+  start_listener_on "${2:-127.0.0.1}" "$1"
+}
+
+# NOTE: not `python3 -m http.server`: http.server calls getfqdn() on the bind
+# address before listening, and reverse-DNS for a Tailscale IP stalls here —
+# the listener would never come up. A raw socket has no such lookup.
+start_listener_on() { # $1=ip $2=port -> prints pid
+  local ip=$1 port=$2 pid i
+  python3 - "$ip" "$port" >/dev/null 2>&1 <<'EOF' &
+import socket, sys
+s = socket.socket()
+s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+s.bind((sys.argv[1], int(sys.argv[2])))
+s.listen(5)
+while True:
+    c, _ = s.accept()
+    try:
+        c.recv(4096)
+    except OSError:
+        pass
+    try:
+        c.sendall(b"HTTP/1.0 200 OK\r\nContent-Length: 2\r\n\r\nok")
+    except OSError:
+        pass
+    c.close()
+EOF
   pid=$!
   for i in $(seq 1 15); do
-    tcp_open 127.0.0.1 "$port" && { printf '%s\n' "$pid"; return 0; }
+    if timeout 1 bash -c "exec 3<>/dev/tcp/$ip/$port" 2>/dev/null; then
+      printf '%s\n' "$pid"; return 0
+    fi
     kill -0 "$pid" 2>/dev/null || return 1
     sleep 0.2
   done
@@ -142,11 +215,13 @@ start_listener() { # $1=port -> prints pid; fails unless it is really listening
 
 cmd_install() {
   need_root
-  local owner="${1:-}" ports="${2:-}"
+  local owner="${1:-}" ports="${2:-}" targets="${3:-}"
   valid_owner "$owner" || die "bad owner '${owner}' (letters, digits, _ . - only)"
   valid_ports "$ports" || die "bad ports '${ports}' (comma separated integers only)"
+  valid_targets "$targets" || die "bad targets '${targets}' (comma separated host:port, literal IPv4 only)"
   # canonical form: sorted, unique — the stamp must not depend on caller order
   ports=$(printf '%s' "$ports" | tr ',' '\n' | sort -nu | paste -sd, -)
+  targets=$(printf '%s' "$targets" | tr ',' '\n' | sort -u | paste -sd, -)
   command -v nft >/dev/null 2>&1 || die "nft not found"
   command -v python3 >/dev/null 2>&1 || die "python3 not found (verify needs it)"
 
@@ -178,7 +253,7 @@ cmd_install() {
   #    configured endpoint ports change; no sandbox runs while we install)
   local tmp
   tmp=$(mktemp) || die "mktemp failed"
-  write_rules "$ports" > "$tmp"
+  write_rules "$ports" "$targets" > "$tmp"
   nft delete table inet "$TABLE" 2>/dev/null || true
   if ! nft -f "$tmp"; then
     rm -f "$tmp"
@@ -188,14 +263,14 @@ cmd_install() {
 
   # 4. the stamp so unprivileged code can check freshness (helper_sha pins the
   #    installed helper/rules to this exact version of the script)
-  printf 'version=%s\nports=%s\nowner=%s\nhelper_sha=%s\ninstalled_at=%s\n' \
-    "$VERSION" "$ports" "$owner" \
+  printf 'version=%s\ntargets=%s\nowner=%s\nhelper_sha=%s\ninstalled_at=%s\n' \
+    "$VERSION" "$targets" "$owner" \
     "$(sha256sum "$SELF" | cut -d' ' -f1)" \
     "$(date -Is 2>/dev/null || date)" >"$STAMP" ||
     die "cannot write $STAMP"
 
-  echo "netguard: installed (endpoint ports: ${ports:-none}, helper: $HELPER)"
-  cmd_verify "$ports" || die "post-install verification FAILED — guard not usable"
+  echo "netguard: installed (endpoints: ${targets:-none}, helper: $HELPER)"
+  cmd_verify "$ports" "$targets" || die "post-install verification FAILED — guard not usable"
 }
 
 cmd_uninstall() {
@@ -218,10 +293,10 @@ cmd_uninstall() {
 }
 
 cmd_status() {
-  local rc=0 ports
+  local rc=0 targets
   if stamp_version_ok; then
-    ports=$(sed -n 's/^ports=//p' "$STAMP")
-    echo "stamp:  ok (version=$VERSION, endpoint ports: ${ports:-none})"
+    targets=$(sed -n 's/^targets=//p' "$STAMP")
+    echo "stamp:  ok (version=$VERSION, endpoints: ${targets:-none})"
   else
     echo "stamp:  missing or stale ($STAMP)"
     rc=1
@@ -278,19 +353,22 @@ cmd_exec_as() {
 
 cmd_verify() {
   need_root
-  local ports="${1:-}"
+  local ports="${1:-}" targets="${2:-}"
   valid_ports "$ports" || die "bad ports '${ports}'"
+  valid_targets "$targets" || die "bad targets '${targets}'"
   nft list table inet "$TABLE" >/dev/null 2>&1 || die "table inet $TABLE not loaded"
   [ -d "$CGROUP" ] || die "cgroup $CGROUP missing"
   command -v python3 >/dev/null 2>&1 || die "python3 not found"
 
-  echo "netguard: verifying (ports: ${ports:-none}) ..."
+  echo "netguard: verifying (ports: ${ports:-none} targets: ${targets:-none}) ..."
 
   # listeners: one "endpoint" (first guarded port), one foreign host service,
   # and later one service started *inside* the cgroup
   local eport efirst fport oport ep_pid="" fp_pid="" op_pid=""
   efirst=$(printf '%s' "$ports" | cut -d, -f1)
-  if tcp_open 127.0.0.1 "$efirst"; then
+  if [ -z "$efirst" ] || [ "$efirst" = "0" ]; then
+    eport=""                       # no loopback endpoint ports configured
+  elif tcp_open 127.0.0.1 "$efirst"; then
     eport=$efirst                      # the real endpoint is already up
   else
     if ep_pid=$(start_listener "$efirst"); then
@@ -303,12 +381,38 @@ cmd_verify() {
   fp_pid=$(start_listener "$fport") || die "cannot start foreign test listener"
   oport=$(pick_port "$ports") || die "no free test port"
 
+  # non-loopback targets: one listener per target host (temp unless the real
+  # endpoint is already answering), plus one foreign listener on the first
+  # such host to prove anything unlisted stays blocked there too
+  local taddrs="" tp_pids="" t h p tp_pid
+  for t in ${targets//,/ }; do
+    [ -n "$t" ] || continue
+    h=${t%:*}; p=${t##*:}
+    case "$h" in 127.0.0.1|"::1"|localhost) continue;; esac
+    taddrs="${taddrs} $t"
+    if tcp_open "$h" "$p"; then
+      : # the real endpoint is already up — probe it directly
+    else
+      tp_pid=$(start_listener_on "$h" "$p") \
+        || die "cannot listen on target $t (needed for the test)"
+      tp_pids="${tp_pids} $tp_pid"
+    fi
+  done
+  local neg_host="" neg_port="" neg_pid=""
+  for t in $taddrs; do
+    neg_host=${t%:*}
+    neg_port=$(pick_port_on "$neg_host" "$ports") || die "no free test port on $neg_host"
+    neg_pid=$(start_listener_on "$neg_host" "$neg_port") \
+      || die "cannot start foreign $neg_host listener"
+    break
+  done
+
   local res
   res=$(mktemp) || die "mktemp failed"
 
   # ---- inside the guard cgroup (this is what the sandbox experiences) ----
   bash -c '
-    cg=$1; eport=$2; fport=$3; oport=$4; out=$5
+    cg=$1; eport=$2; fport=$3; oport=$4; out=$5; taddrs=$6; neg=$7
     if ! echo $$ > "$cg/cgroup.procs" 2>/dev/null; then
       echo "attach:FAIL" > "$out"; exit 0
     fi
@@ -319,8 +423,12 @@ cmd_verify() {
       echo "own:STARTFAIL" >> "$out"; exit 0
     fi
     echo "ownpid:$ownpid" >> "$out"
-    if timeout 3 bash -c "exec 3<>/dev/tcp/127.0.0.1/$eport" 2>/dev/null; then
-      echo "endpoint:OK" >> "$out"; else echo "endpoint:BLOCKED" >> "$out"; fi
+    if [ -n "$eport" ]; then
+      if timeout 3 bash -c "exec 3<>/dev/tcp/127.0.0.1/$eport" 2>/dev/null; then
+        echo "endpoint:OK" >> "$out"; else echo "endpoint:BLOCKED" >> "$out"; fi
+    else
+      echo "endpoint:SKIP" >> "$out"
+    fi
     if timeout 3 bash -c "exec 3<>/dev/tcp/127.0.0.1/$oport" 2>/dev/null; then
       echo "own:OK" >> "$out"; else echo "own:BLOCKED" >> "$out"; fi
     if timeout 3 bash -c "exec 3<>/dev/tcp/127.0.0.1/$fport" 2>/dev/null; then
@@ -336,7 +444,17 @@ s.sendto(bytes.fromhex(\"123401000001000000000000076578616d706c6503636f6d0000010
 s.recvfrom(512)
 " 2>/dev/null; then
       echo "dns:OK" >> "$out"; else echo "dns:BLOCKED" >> "$out"; fi
-  ' _ "$CGROUP" "$eport" "$fport" "$oport" "$res"
+    for t in $taddrs; do
+      h=${t%:*}; p=${t##*:}
+      if timeout 3 bash -c "exec 3<>/dev/tcp/$h/$p" 2>/dev/null; then
+        echo "target:$t:OK" >> "$out"; else echo "target:$t:BLOCKED" >> "$out"; fi
+    done
+    if [ -n "$neg" ]; then
+      h=${neg%:*}; p=${neg##*:}
+      if timeout 3 bash -c "exec 3<>/dev/tcp/$h/$p" 2>/dev/null; then
+        echo "targetneg:OK" >> "$out"; else echo "targetneg:BLOCKED" >> "$out"; fi
+    fi
+  ' _ "$CGROUP" "$eport" "$fport" "$oport" "$res" "$taddrs" "${neg_host:+$neg_host:$neg_port}"
 
   # ---- host side (the host must keep working) ----
   local host_foreign host_endpoint
@@ -359,13 +477,25 @@ s.recvfrom(512)
     echo "  FAIL  could not enter the guard cgroup"
     fails=$((fails + 1))
   else
-    expect "sandbox -> endpoint port"              OK    "$(get endpoint)"
+    if [ "$(get endpoint)" = "SKIP" ]; then
+      echo "  SKIP  no loopback endpoint ports configured"
+    else
+      expect "sandbox -> endpoint port"            OK    "$(get endpoint)"
+    fi
     expect "sandbox -> its own local service"      OK    "$(get own)"
     expect "sandbox -> foreign local service"      BLOCKED "$(get foreign)"
     expect "sandbox -> internet"                   BLOCKED "$(get remote)"
     expect "sandbox -> DNS (127.0.0.53)"           BLOCKED "$(get dns)"
     expect "host    -> foreign local service"      OK    "$host_foreign"
     expect "host    -> endpoint port"              OK    "$host_endpoint"
+    for t in $taddrs; do
+      expect "sandbox -> endpoint target $t"       OK    "$(get "target:$t")"
+    done
+    if [ -n "$neg_host" ]; then
+      if tcp_open "$neg_host" "$neg_port"; then neg_host_state=OK; else neg_host_state=BLOCKED; fi
+      expect "host    -> foreign $neg_host service" OK  "$neg_host_state"
+      expect "sandbox -> foreign $neg_host service" BLOCKED "$(get targetneg)"
+    fi
   fi
 
   # ---- cleanup ----
@@ -373,6 +503,8 @@ s.recvfrom(512)
   [ -n "$op_pid" ] && kill "$op_pid" 2>/dev/null
   [ -n "$ep_pid" ] && kill "$ep_pid" 2>/dev/null
   [ -n "$fp_pid" ] && kill "$fp_pid" 2>/dev/null
+  [ -n "$neg_pid" ] && kill "$neg_pid" 2>/dev/null
+  for tp_pid in $tp_pids; do kill "$tp_pid" 2>/dev/null; done
   rm -f "$res"
   sleep 0.2
 

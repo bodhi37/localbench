@@ -8,8 +8,8 @@
   "notes": "Isolates Burnside/orbit counting under a rotation-only group action with a fixed colour multiset - the multiset constraint kills every non-zero fix contribution except r=0, r=3/9, r=6, which is where careless solvers lose. Confound removed: no labelled-position counting and no reflection ambiguity (prompt states reflections are NOT identified). Tier 3: correct method (Burnside, not naive division) required and there are three distinct failure modes; strong-model prior 40-70%. Grading scope: final 'FINAL:' line only; the mod-97 part makes a lucky integer guess worthless. False-positive audit: (a) 34650/15 raw count, (b) 2895/82 (dropped r=3,9 terms), (c) 2896/residue 0, (d) prose only - all rejected.",
   "contamination_source": "original (Burnside is a textbook technique; the necklace size, colour multiset and residue check are bespoke)",
   "validation_log": {
-    "step2_verifier_vs_solution": "pass (FINAL: necklaces=2896 residue=83)",
-    "step2b_independent_confirmation": "exhaustive orbit enumeration over 34650 raw colourings returns 2896",
+    "step2_verifier_vs_solution": "pass (withheld: re-derive the answer from prompt.md; the worked solution lives in gitignored SOLUTION.md)",
+    "step2b_independent_confirmation": "pass (withheld: re-derive the answer from prompt.md; the worked solution lives in gitignored SOLUTION.md)",
     "step3_wrong_responses_rejected": "3/3 rejected (34650, 2895, wrong residue)",
     "step4_cold_reread_ambiguity": "rotation-only sameness fixed explicitly; 'non-negative remainder' fixed for residue; four readings converge",
     "step5_self_contained_fresh_copy": "pass",

@@ -8,7 +8,7 @@
   "notes": "Isolates sequential exact-integer arithmetic under a fixed procedural order (two floor/ceil decisions that must not be collapsed). Confound removed: no algebra, no units beyond cents, no estimation. Tier 1: one linear pass with two round-ups; a strong model should be >90%. Grading scope: only the final 'FINAL:' line is graded, parsed as two integers. False-positive audit: (a) 18/8730 (used cookies needed, not baked), (b) 18/8730 (ignored breakage, 69 trays), (c) cost as 92.15, (d) prose with no FINAL line, (e) correct line followed by trailing text - all rejected by verify.py.",
   "contamination_source": "original",
   "validation_log": {
-    "step2_verifier_vs_solution": "pass (FINAL: batches=19 cost_cents=9215)",
+    "step2_verifier_vs_solution": "pass (withheld: re-derive the answer from prompt.md; the worked solution lives in gitignored SOLUTION.md)",
     "step3_wrong_responses_rejected": "5/5 rejected (18/8730 used-needed, 18/8730 breakage-ignored, 92.15 decimal, no FINAL line, trailing text after FINAL)",
     "step4_cold_reread_ambiguity": "fixed: step 4 now explicitly says batches are measured against cookies actually baked in step 3, closing the 'needed vs baked' reading",
     "step5_self_contained_fresh_copy": "pass",

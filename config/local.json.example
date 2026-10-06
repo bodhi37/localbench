@@ -44,6 +44,18 @@
       "port": 8002,
       "external": true,
       "ready": 60
+    },
+    {
+      "_comment": "host = literal IPv4 when the server is not on loopback (Tailscale, LAN). DNS names cannot work: name resolution is blocked inside the sandbox by design. api_key = bearer key for the readiness probes; when absent, the provider's apiKey is read from models_json automatically.",
+      "slug": "example-tailscale",
+      "name": "Example Tailscale Server",
+      "provider": "example-local",
+      "model": "example-model-d",
+      "host": "192.0.2.1",
+      "port": 8003,
+      "api_key": null,
+      "external": true,
+      "ready": 60
     }
   ],
 

@@ -74,3 +74,10 @@ def harness_cfg() -> dict:
     if missing:
         raise ConfigError(f"harness config missing {missing} in {LOCAL_FILE}")
     return defaults
+
+
+def ep_host(ep: dict) -> str:
+    """Where an endpoint listens. Loopback unless the config says otherwise
+    (a Tailscale/LAN server declares ``"host"`` as a literal IP — DNS is
+    blocked inside the sandbox by design, so hostnames cannot work there)."""
+    return str(ep.get("host") or "127.0.0.1")

@@ -102,3 +102,9 @@ def test_per_item_grader_overrides_bench_grader(tmp_path, monkeypatch):
 
 def test_custom_root_is_where_we_think_it_is():
     assert CUSTOM_ROOT.is_dir()
+
+
+def test_load_units_warns_on_partially_unknown_benchmark(capsys):
+    units = registry.load_units(benchmarks=["math", "nope-not-real"])
+    assert units, "valid benchmarks must still load"
+    assert "nope-not-real" in capsys.readouterr().err

@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Optional
 
 from . import netguard
-from .config import harness_cfg
+from .config import ep_host, harness_cfg
 from .registry import Unit
 
 SYSPROMPT = (
@@ -58,7 +58,7 @@ def now_iso() -> str:
 
 
 def _bwrap_cmd(cfg: dict, unit: Unit, out_dir: Path, work_dir: Path,
-               home: Path) -> list[str]:
+               home: Path, no_proxy_hosts: tuple = ()) -> list[str]:
     pi_tree = cfg["pi_tree"]
     task_dir = unit.task_dir
     cmd = [
@@ -100,7 +100,7 @@ def _bwrap_cmd(cfg: dict, unit: Unit, out_dir: Path, work_dir: Path,
         "--setenv", "NO_COLOR", "1",
         "--setenv", "PI_OFFLINE", "1",
     ]
-    cmd += _network_env(cfg)
+    cmd += _network_env(cfg, no_proxy_hosts)
     cmd += ["--", "node", str(Path("/pi") / cfg["pi_cli"])]
     return cmd
 
@@ -135,12 +135,12 @@ def write_models_shim(source: Path, provider: str, home: Path) -> Path:
     return dest
 
 
-def _network_env(cfg: dict) -> list[str]:
+def _network_env(cfg: dict, extra_no_proxy: tuple = ()) -> list[str]:
     """Keep the sandbox off the public internet while leaving loopback alone.
 
     The sandbox MUST share the host network namespace — the model under test
-    lives on 127.0.0.1, and ``bwrap --unshare-net`` would give it a private
-    loopback that cannot reach the host. So egress is blocked by pointing every
+    lives on 127.0.0.1 (or a configured ``host``), and ``bwrap --unshare-net``
+    would give it a private loopback that cannot reach the host. So egress is blocked by pointing every
     well-behaved HTTP client at a dead proxy, with ``no_proxy`` carved out for
     loopback so the endpoint stays reachable.
 
@@ -156,8 +156,12 @@ def _network_env(cfg: dict) -> list[str]:
         out += ["--setenv", k, dead]
     for k in ("all_proxy", "ALL_PROXY"):
         out += ["--setenv", k, "socks5://127.0.0.1:9"]
+    seen = ["127.0.0.1", "localhost", "::1"]
+    for h in extra_no_proxy:
+        if h and h not in seen:
+            seen.append(h)
     for k in ("no_proxy", "NO_PROXY"):
-        out += ["--setenv", k, "127.0.0.1,localhost,::1"]
+        out += ["--setenv", k, ",".join(seen)]
     # Node's built-in fetch (undici) ignores the proxy variables above on
     # Node < 24; from 24 it honours them only when this is set. Pi is a Node
     # app, so without it the agent's own HTTP client would sail straight past
@@ -259,7 +263,8 @@ def run_unit(unit: Unit, endpoint: dict, out_dir: Path, work_dir: Path,
     write_models_shim(Path(cfg["models_json"]), endpoint["provider"], home)
 
     if cfg.get("sandbox", True):
-        cmd = _bwrap_cmd(cfg, unit, out_dir, work_dir, home)
+        cmd = _bwrap_cmd(cfg, unit, out_dir, work_dir, home,
+                         (ep_host(endpoint),))
     else:
         cmd = []
     cmd += _agent_args(cfg, endpoint)

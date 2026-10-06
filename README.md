@@ -84,11 +84,26 @@ Endpoints live in `config/local.json` (gitignored). Two shapes:
 
 { "slug": "already-running", "provider": "my-local", "model": "my-model",
   "port": 8105, "external": true, "ready": 30 }
+
+{ "slug": "tailscale-model", "provider": "my-local", "model": "my-model",
+  "host": "192.0.2.1",                  // literal IPv4, not loopback
+  "port": 8127, "api_key": null,          // bearer key for readiness probes;
+                                          // null = reuse the provider's apiKey
+                                          // from models.json automatically
+  "external": true, "ready": 30 }
 ```
 
 `"external": true` means *don't manage it*: no conflicting server is stopped,
 nothing is started, and it is left running when the run ends. Use it for a
 server you started yourself, or for one on another machine.
+
+`"host"` defaults to `127.0.0.1`. A non-loopback host must be a literal IPv4
+address — DNS names cannot resolve inside the sandbox, because name resolution
+is blocked there by design. The sandbox may reach that host **only** on the
+configured TCP port; everything else on that interface stays dropped (see
+**Sandboxing**). The `no_proxy` carve-out automatically includes every
+configured endpoint host, so the dead-proxy convention never blocks the model
+from reaching its own endpoint.
 
 `localbench` refuses to run against an endpoint until `/v1/models` reports the
 configured model **and** a 1-token completion succeeds — so a half-loaded or
@@ -290,6 +305,13 @@ What is **kernel-enforced about egress**, since the sandbox shares the host net:
       foreign local services (DNS stub, another LLM, agent APIs) are
       unreachable from the sandbox. Host packets themselves are never marked,
       so none of this ever matches the host.
+    - *non-loopback endpoint targets* (a `"host"` that is not loopback, e.g.
+      Tailscale) get one explicit output accept each — that IPv4 host, that
+      TCP port, and nothing else. Replies need no rule: they can only exist
+      if their SYN passed an accept first, and unmarked non-loopback input is
+      accepted by chain policy. `localbench netguard verify` proves each
+      listed target reachable and a neighbouring unlisted port on the same
+      host blocked.
 
     Entry is race-free: `scripts/netguard.sh` is installed with
     `python3 -m localbench netguard install` once per boot, and each sandbox

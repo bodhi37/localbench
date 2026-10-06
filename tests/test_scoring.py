@@ -117,3 +117,11 @@ def test_models_are_ranked_by_suite_score():
     rows = [rec("top", "1", "b", True), rec("top", "2", "b", True),
             rec("bot", "1", "b", False), rec("bot", "2", "b", True)]
     assert score(rows, weights={}, expected={})["order"] == ["top", "bot"]
+
+
+def test_newest_run_prefers_wall_clock_over_lexicographic_id():
+    from localbench.scoring import latest_run_per_model_benchmark
+    rows = [dict(run_id="r9", model_slug="m", benchmark="b", ts="2026-10-01T00:00:00"),
+            dict(run_id="r10", model_slug="m", benchmark="b", ts="2026-10-02T00:00:00")]
+    assert latest_run_per_model_benchmark(rows) == {("m", "b"): "r10"}
+    assert [r["run_id"] for r in select(rows)] == ["r10"]

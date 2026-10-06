@@ -277,3 +277,19 @@ class TestModelsShim:
         bad.write_text("{not json")
         with pytest.raises(RuntimeError, match="cannot read"):
             write_models_shim(bad, "x", tmp_path / "h")
+
+
+def test_no_proxy_includes_endpoint_host(tmp_path):
+    from localbench.harness import _network_env
+    triples = {}
+    out = _network_env({"block_network": True}, ("192.0.2.7",))
+    for i in range(0, len(out), 3):
+        triples[out[i + 1]] = out[i + 2]
+    assert "192.0.2.7" in triples["no_proxy"]
+    assert "127.0.0.1" in triples["no_proxy"]
+    assert triples["no_proxy"] == triples["NO_PROXY"]
+    out2 = _network_env({"block_network": True})
+    triples2 = {}
+    for i in range(0, len(out2), 3):
+        triples2[out2[i + 1]] = out2[i + 2]
+    assert triples2["no_proxy"] == "127.0.0.1,localhost,::1"

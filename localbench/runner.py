@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Optional
 
 from . import harness, netguard
-from .config import RESULTS_DIR, RESULTS_JSONL, load_local
+from .config import RESULTS_DIR, RESULTS_JSONL, ep_host, load_local
 from .graders import grade
 from .registry import Unit, load_units
 
@@ -32,6 +32,31 @@ def _sh(cmd: list[str]) -> subprocess.CompletedProcess:
 
 def make_run_id() -> str:
     return time.strftime("%Y%m%d-%H%M%S")
+
+
+def _endpoint_key(ep: dict, local: dict) -> Optional[str]:
+    """Bearer key for the readiness probes, if the server needs one.
+
+    Explicit ``"api_key"`` on the endpoint wins; otherwise the provider's key
+    is read from the same models registry the agent itself uses — no second
+    copy of the secret to keep in sync. Both live in gitignored files.
+    """
+    if ep.get("api_key"):
+        return str(ep["api_key"])
+    try:
+        models_json = (local.get("harness") or {}).get("models_json")
+        if not models_json:
+            return None
+        reg = json.loads(Path(models_json).read_text(encoding="utf-8"))
+        prov = (reg.get("providers") or {}).get(ep.get("provider") or "")
+        key = (prov or {}).get("apiKey")
+        return str(key) if key else None
+    except (OSError, ValueError):
+        return None
+
+
+def _auth_headers(key: Optional[str]) -> dict:
+    return {"Authorization": f"Bearer {key}"} if key else {}
 
 
 def _gpu_mem_mib() -> int:
@@ -69,20 +94,24 @@ def stop_everything(local: dict) -> None:
         time.sleep(3.0)
 
 
-def _endpoint_warm(ep: dict) -> bool:
-    url = f"http://127.0.0.1:{ep['port']}/v1/chat/completions"
+def _endpoint_warm(ep: dict, host: Optional[str] = None,
+                   key: Optional[str] = None) -> bool:
+    host = host or ep_host(ep)
+    url = f"http://{host}:{ep['port']}/v1/chat/completions"
     body = json.dumps(dict(model=ep["model"], max_tokens=1,
                            messages=[{"role": "user", "content": "hi"}])).encode()
     try:
-        req = urllib.request.Request(url, data=body,
-                                     headers={"Content-Type": "application/json"})
+        headers = {"Content-Type": "application/json"}
+        headers.update(_auth_headers(key))
+        req = urllib.request.Request(url, data=body, headers=headers)
         with urllib.request.urlopen(req, timeout=120) as r:
             return r.status == 200
     except Exception:
         return False
 
 
-def wait_ready(ep: dict, log: Path) -> tuple[bool, str, Optional[str]]:
+def wait_ready(ep: dict, log: Path,
+               key: Optional[str] = None) -> tuple[bool, str, Optional[str]]:
     """Poll /v1/models until the endpoint answers, then confirm weights are hot.
 
     Returns (ok, message, reported_model_id). Servers that only ever host one
@@ -90,12 +119,15 @@ def wait_ready(ep: dict, log: Path) -> tuple[bool, str, Optional[str]]:
     accepted on a single-model response plus a successful 1-token completion;
     the id actually reported is returned so it can be recorded in results.
     """
-    url = f"http://127.0.0.1:{ep['port']}/v1/models"
+    host = ep_host(ep)
+    url = f"http://{host}:{ep['port']}/v1/models"
     deadline = time.time() + ep.get("ready", 420)
     t0 = time.time()
     while time.time() < deadline:
         try:
-            with urllib.request.urlopen(url, timeout=3) as r:
+            headers = _auth_headers(key)
+            req = urllib.request.Request(url, headers=headers or {})
+            with urllib.request.urlopen(req, timeout=3) as r:
                 data = json.loads(r.read().decode())
             ids = [m.get("id") for m in data.get("data", [])]
             if ep["model"] in ids:
@@ -103,25 +135,26 @@ def wait_ready(ep: dict, log: Path) -> tuple[bool, str, Optional[str]]:
             elif len(ids) == 1:
                 reported = ids[0]
             else:
-                return False, f"expected {ep['model']!r} on :{ep['port']}, server offers {ids}", None
-            if _endpoint_warm(ep):
+                return False, f"expected {ep['model']!r} on {host}:{ep['port']}, server offers {ids}", None
+            if _endpoint_warm(ep, host, key):
                 how = ("exact id match" if reported == ep["model"]
                        else f"sole model served: {reported}")
                 return True, (f"ready in {time.time() - t0:.0f}s "
-                              f"({how} on :{ep['port']})"), reported
+                              f"({how} on {host}:{ep['port']})"), reported
         except Exception:
             pass
         time.sleep(4.0)
     tail = ""
     if log.is_file():
         tail = " | ".join(log.read_text(errors="replace").splitlines()[-4:])
-    return False, f"timeout waiting for {ep['model']} on :{ep['port']}. {tail}", None
+    return False, f"timeout waiting for {ep['model']} on {host}:{ep['port']}. {tail}", None
 
 
 def start_endpoint(local: dict, ep: dict, log: Path) -> tuple[bool, str, Optional[str]]:
+    key = _endpoint_key(ep, local)
     if ep.get("external"):
         # already running and not ours to manage: no VRAM drain, no start
-        return wait_ready(ep, log)
+        return wait_ready(ep, log, key)
     stop_everything(local)
     if ep.get("units"):
         for u in ep["units"]:
@@ -149,7 +182,7 @@ def start_endpoint(local: dict, ep: dict, log: Path) -> tuple[bool, str, Optiona
         ep["_proc"], ep["_pid"] = proc, proc.pid
     else:
         return False, "no start method configured", None
-    return wait_ready(ep, log)
+    return wait_ready(ep, log, key)
 
 
 def _kill_group(pid: int) -> None:
@@ -173,10 +206,10 @@ def _kill_group(pid: int) -> None:
             time.sleep(0.2)
 
 
-def _listening(port: int) -> bool:
-    """Is anything still accepting connections on this port?"""
+def _listening(port: int, host: str = "127.0.0.1") -> bool:
+    """Is anything still accepting connections on this host:port?"""
     try:
-        with socket.create_connection(("127.0.0.1", port), timeout=1.0):
+        with socket.create_connection((host, port), timeout=1.0):
             return True
     except OSError:
         return False
@@ -201,7 +234,7 @@ def stop_endpoint(local: dict, ep: dict) -> None:
     # listening — that pattern matches *any* process whose argv merely
     # contains the text, so it is a fallback for a server that daemonised
     # itself out of our group, not the first resort.
-    if ep.get("serve_cmd") and _listening(ep["port"]):
+    if ep.get("serve_cmd") and _listening(ep["port"], ep_host(ep)):
         _pkill([rf"--port {ep['port']}\b"])
     time.sleep(5.0)
 
@@ -267,7 +300,8 @@ def run(models: list[str], benchmarks: Optional[list[str]],
     print(f"\nrun_id = {run_id}")
 
     for ep in endpoints:
-        print(f"\n### {ep['name']} ({ep['provider']}:{ep['model']} :{ep['port']})"
+        print(f"\n### {ep['name']} ({ep['provider']}:{ep['model']} "
+              f"{ep_host(ep)}:{ep['port']})"
               + ("  [external — not managed]" if ep.get("external") else ""))
         log = transcripts / f"server-{ep['slug']}.log"
         transcripts.mkdir(parents=True, exist_ok=True)
@@ -293,8 +327,16 @@ def run(models: list[str], benchmarks: Optional[list[str]],
             print(f"  [{i}/{len(units)}] {unit.benchmark}/{unit.ref} "
                   f"({unit.grader}, cap {unit.timeout}s) ...", flush=True)
 
-            rec = run_unit_safe(unit, ep, out_dir, work_dir, tr, unit.timeout,
-                                keep_work, run_id, selected_counts[unit.benchmark])
+            try:
+                rec = run_unit_safe(unit, ep, out_dir, work_dir, tr, unit.timeout,
+                                    keep_work, run_id, selected_counts[unit.benchmark])
+            except Exception:
+                # fail-closed must not leak the endpoint: a guard failure (or
+                # any harness crash) still stops what we started before the
+                # exception propagates — otherwise a managed server keeps
+                # holding the GPU with no run left to use it.
+                stop_endpoint(local, ep)
+                raise
             rec["reported_model"] = reported
             mark = ("PASS" if rec["pass_"]
                     else "TIMEOUT" if rec["timed_out"] else "FAIL")

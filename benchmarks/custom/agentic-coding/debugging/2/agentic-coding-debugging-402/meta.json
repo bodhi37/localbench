@@ -8,8 +8,8 @@
   "notes": "Isolates finding three seeded defects in a small module against a written spec: an initialisation bug (best = 0 breaks all-negative input), an off-by-one window range, and the same off-by-one repeated in a second function, with a third function that is already correct as a control against blind rewriting. Confound removed: no dependencies, no I/O, module-level behaviour is pure; the spec is restated in the prompt so the contract is not in doubt. Tier 2: two distinct defect classes plus one fix that must be applied in two places; strong-model prior 70-90%. Grading scope: $OUT_DIR/window.py only, exercised over 22 fixed vectors (source: tests/vectors.json) in a subprocess with a scrubbed env and a 30s timeout; import-time output is a failure. False-positive audit: (a) the original buggy module, (b) only the range fixed (all-negative still fails), (c) only best=None fixed (last window still missed), (d) a module that prints on import, (e) no file - all rejected.",
   "contamination_source": "original (sliding-window off-by-one and max-initialisation are classic defect classes; the module, spec and vectors are bespoke)",
   "validation_log": {
-    "step2_verifier_vs_solution": "pass (22/22 vectors, silent import, no input mutation)",
-    "step2b_verified_buggy_behaviour": "resources/window.py returns 16 vs 17, 0 vs -5, 0 vs 8 and 2 vs 3 on the key vectors, confirming all three defects are real and observable",
+    "step2_verifier_vs_solution": "pass (withheld: re-derive the answer from prompt.md; the worked solution lives in gitignored SOLUTION.md)",
+    "step2b_verified_buggy_behaviour": "pass (withheld: re-derive the answer from prompt.md; the worked solution lives in gitignored SOLUTION.md)",
     "step3_wrong_responses_rejected": "5/5 rejected (buggy original, range-only fix, best-only fix, noisy import, missing file)",
     "step4_cold_reread_ambiguity": "exact return values for k<=0 and k>len, strictness of 'strictly greater', 'must not modify values' and 'no import-time execution' are all stated",
     "step5_self_contained_fresh_copy": "pass (vectors live in tests/, harness-side)",

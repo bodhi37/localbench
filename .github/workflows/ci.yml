@@ -49,11 +49,23 @@ jobs:
             find benchmarks -name 'SOLUTION.md'
             exit 1
           fi
+          if git grep -nE 'FINAL: [A-Za-z_0-9]+=' -- 'benchmarks/custom/*/meta.json'; then
+            echo "::error::a tracked meta.json embeds a literal answer — validation_log step2 must stay withheld"
+            exit 1
+          fi
+          if git ls-files | grep -E '^config/local\.json$|^results/|benchmarks/known/.*/data/' \
+               | grep -v '^\.gitkeep$' | grep -v '^results/\.gitkeep$'; then
+            echo "::error::machine-local or run artifacts are tracked — local.json, results/ and fetched data must stay gitignored"
+            exit 1
+          fi
           echo "ok: no reference solutions tracked or checked out"
 
       - name: No machine-specific paths
         run: |
-          if git ls-files -z | xargs -0 -r grep -lIE '/home/[a-z]|/Users/|C:\\\\Users' \
+          # the workflow itself names the patterns, so it is excluded —
+          # anything else matching is a real leak
+          if git ls-files -z | grep -zv '^\.github/workflows/ci\.yml$' \
+               | xargs -0 -r grep -lIE '/home/[a-z]|/Users/|C:\\\\Users|100\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' \
                --exclude-dir=.git 2>/dev/null; then
             echo "::error::absolute machine paths leaked into tracked files"
             exit 1

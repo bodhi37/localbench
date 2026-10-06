@@ -39,14 +39,28 @@ def available_runs(records: list[dict]) -> list[str]:
     return sorted({r["run_id"] for r in records if r.get("run_id")})
 
 
+def _newest_key(r: dict) -> tuple:
+    """Ordering key for "newest run": wall-clock first, run_id as tiebreak.
+
+    Runner-generated ids (``%Y%m%d-%H%M%S``) already sort chronologically, but
+    hand-named ``--run-id`` values (``r9`` vs ``r10``) do not sort
+    lexicographically — every record carries a ``ts`` stamp, so time wins
+    and the id only breaks ties.
+    """
+    return (r.get("ts") or "", r.get("run_id") or "")
+
+
 def latest_run_per_model(records: list[dict]) -> dict[str, str]:
     """model_slug -> newest run_id that contains it."""
+    best: dict[str, tuple] = {}
     out: dict[str, str] = {}
     for r in records:
         slug, rid = r.get("model_slug"), r.get("run_id")
         if not slug or not rid:
             continue
-        if slug not in out or rid > out[slug]:
+        k = _newest_key(r)
+        if slug not in best or k > best[slug]:
+            best[slug] = k
             out[slug] = rid
     return out
 
@@ -60,12 +74,15 @@ def latest_run_per_model_benchmark(records: list[dict]) -> dict[tuple, str]:
     older run and under-scored multi-run models.
     """
     out: dict[tuple, str] = {}
+    best: dict[tuple, tuple] = {}
     for r in records:
         slug, rid, bench = r.get("model_slug"), r.get("run_id"), r.get("benchmark")
         if not slug or not rid or not bench:
             continue
         key = (slug, bench)
-        if key not in out or rid > out[key]:
+        k = _newest_key(r)
+        if key not in best or k > best[key]:
+            best[key] = k
             out[key] = rid
     return out
 

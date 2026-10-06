@@ -454,17 +454,25 @@ def _integral(x: float) -> bool:
 
 
 def grade_math(unit, out_dir: Path, response: str) -> Result:
-    cand = _final_line(response)
-    if cand is None:
+    lines = _lines(response)
+    if not lines:
         return False, "empty response"
-    cand = _strip_md_ends(cand)
-    if cand.upper().startswith("FINAL:"):
-        cand = cand.split(":", 1)[1].strip()
+    # An explicit FINAL: line is the model's stated answer and always wins:
+    # a \boxed{} elsewhere in the reasoning must never override it (the old
+    # code fell through to the box whenever both were present and graded the
+    # wrong value). Only when there is no FINAL: line at all do we fall back
+    # to the \boxed{} convention.
+    final = None
+    for ln in reversed(lines):
+        if ln.upper().startswith("FINAL:"):
+            final = ln.split(":", 1)[1].strip()
+            break
+    if final is not None:
+        cand = final
     else:
-        # fall back to the usual \boxed{...} convention
         boxed = _boxed(response)
-        if boxed is not None:
-            cand = boxed
+        cand = boxed if boxed is not None else lines[-1]
+    cand = _strip_md_ends(cand)
     if r"\boxed{" in cand:          # FINAL: \boxed{6} — a box on the final line
         inner = _boxed(cand)
         if inner is not None:
@@ -514,7 +522,27 @@ def _extract_code(response: str) -> str:
     return (response or "").rstrip() + "\n"
 
 
-def _sandbox_python_argv(scratch: Path) -> list[str]:
+def _code_policy() -> tuple[bool, str]:
+    """Same gate as :func:`_verify_policy`, for model-generated code.
+
+    Code output is the least trusted thing the harness executes, so the same
+    fail-closed rule applies: when the config asks for a sandbox, a missing
+    bubblewrap is an error, not a silent run on the host.
+    """
+    try:
+        from .config import harness_cfg
+        if not harness_cfg().get("sandbox", True):
+            return False, ""
+    except Exception:
+        return False, ""
+    if not shutil.which("bwrap"):
+        return False, ("code execution requires the sandbox but bubblewrap "
+                       "is missing — install bubblewrap, or set \"sandbox\": "
+                       "false under \"harness\" in config/local.json")
+    return True, ""
+
+
+def _sandbox_python_argv(scratch: Path, sandbox: bool = True) -> list[str]:
     """Run model code without network and with no view of the host filesystem.
 
     ``scratch`` is created under $TMPDIR, which the sandbox shadows with a
@@ -528,14 +556,18 @@ def _sandbox_python_argv(scratch: Path) -> list[str]:
     while everything else looked healthy. So any prefix outside the trees we
     already mount gets bound here, in the same post-tmpfs position.
     """
+    if not sandbox:
+        return [sys.executable]
     bwrap = shutil.which("bwrap")
     if not bwrap:
         return [sys.executable]
     argv = [bwrap, "--ro-bind", "/usr", "/usr",
             "--ro-bind", "/etc", "/etc",
-            "--unshare-net",
+            "--unshare-net", "--unshare-pid",
             "--dev", "/dev", "--proc", "/proc",
             "--tmpfs", "/tmp", "--tmpfs", "/home", "--tmpfs", "/var",
+            "--tmpfs", "/run", "--tmpfs", "/opt", "--tmpfs", "/srv",
+            "--tmpfs", "/mnt", "--tmpfs", "/media", "--tmpfs", "/boot",
             "--symlink", "usr/lib64", "/lib64",
             "--bind", str(scratch), str(scratch)]
     for p in dict.fromkeys(x for x in (sys.prefix, sys.base_prefix) if x):
@@ -548,24 +580,35 @@ def _sandbox_python_argv(scratch: Path) -> list[str]:
     return argv
 
 
-def _run_program(source: str, timeout: int) -> Result:
+def _run_program(source: str, timeout: int, sandbox: bool = True) -> Result:
     """Return (passed, detail) for one candidate program."""
     with tempfile.TemporaryDirectory(prefix="lb-code-") as td:
         scratch = Path(td)
         script = scratch / "candidate.py"
         script.write_text(source, encoding="utf-8")
-        argv = _sandbox_python_argv(scratch)
+        argv = _sandbox_python_argv(scratch, sandbox)
         try:
-            proc = subprocess.run(
-                argv + [str(script)], capture_output=True, text=True,
-                timeout=timeout, cwd=scratch)
-        except subprocess.TimeoutExpired:
-            return False, f"timed out after {timeout}s"
+            proc = subprocess.Popen(
+                argv + [str(script)], stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE, text=True, cwd=scratch,
+                start_new_session=True)
         except OSError as e:
             return False, f"could not execute: {e}"
+        try:
+            stdout, stderr = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+            except (ProcessLookupError, PermissionError, OSError):
+                pass
+            try:
+                proc.communicate(timeout=20)
+            except Exception:
+                pass
+            return False, f"timed out after {timeout}s"
         if proc.returncode == 0:
             return True, "all tests passed"
-        return False, _clip(proc.stderr.strip() or f"rc={proc.returncode}")
+        return False, _clip((stderr or "").strip() or f"rc={proc.returncode}")
 
 
 def _strip_code_suffix(prompt: str) -> str:
@@ -590,6 +633,11 @@ def grade_code(unit, out_dir: Path, response: str) -> Result:
     test = meta.get("test")
     if not test:
         return False, "bench item has no 'test' program"
+    if not (response or "").strip():
+        return False, "empty response"
+    sandbox, err = _code_policy()
+    if err:
+        return False, err
     code = _extract_code(response)
     style = meta.get("code_style", "mbpp")
     timeout = int(meta.get("test_timeout", 60))
@@ -610,7 +658,7 @@ def grade_code(unit, out_dir: Path, response: str) -> Result:
         except SyntaxError as e:
             errs.append(f"syntax error: {e.msg} (line {e.lineno})")
             continue
-        ok, detail = _run_program(src + "\n\n" + test, timeout)
+        ok, detail = _run_program(src + "\n\n" + test, timeout, sandbox)
         if ok:
             return True, "all tests passed"
         # a candidate that *ran* and failed outranks any syntax note: the

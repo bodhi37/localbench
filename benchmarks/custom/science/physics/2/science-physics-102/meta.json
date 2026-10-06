@@ -8,8 +8,8 @@
   "notes": "Isolates two-stage energy reasoning (conservation of energy down a frictionless ramp, then work-energy on a rough floor) with a supplied g. Confound removed: no projectile phase, no rolling, no air drag; the mass is an explicit distractor and cancels. Tier 2: two chained relations plus a trig step; strong-model prior 70-90%. Grading scope: final 'FINAL:' line, exactly 3 dp, half-up. False-positive audit: (a) cos-for-sin, (b) ramp length used as height, (c) truncation (5.460/4.346), (d) units embedded in the values - all rejected.",
   "contamination_source": "original",
   "validation_log": {
-    "step2_verifier_vs_solution": "pass (FINAL: v_bottom=5.461 d_stop=4.347)",
-    "step2b_independent_confirmation": "bit-exact recomputation with math.sin(math.radians(25.0)) and g=9.80 reproduces 5.460764099 and 4.346930692",
+    "step2_verifier_vs_solution": "pass (withheld: re-derive the answer from prompt.md; the worked solution lives in gitignored SOLUTION.md)",
+    "step2b_independent_confirmation": "pass (withheld: re-derive the answer from prompt.md; the worked solution lives in gitignored SOLUTION.md)",
     "step3_wrong_responses_rejected": "4/4 rejected (cos, ramp-length-as-height, truncation, units in values)",
     "step4_cold_reread_ambiguity": "frictionless ramp, smooth transition, half-up rounding and g all stated; four readings converge",
     "step5_self_contained_fresh_copy": "pass",

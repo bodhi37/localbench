@@ -39,9 +39,14 @@ What it cannot reach — kernel-side, for every protocol:
   * the internet (output rule 3 matches on the *sending* cgroup socket);
   * foreign local services: DNS stub, another LLM, an agent API that could
     fetch the web, sync daemons — anything not listening inside its cgroup;
-  * the host's file systems, cgroup controls and netfilter (bwrap mounts
-    neither ``/sys`` nor the host, and its netns belongs to an ancestor user
-    namespace so its capabilities mean nothing).
+  * other machines entirely — except configured endpoint targets, which get
+    one explicit per-target accept (that host, that TCP port, nothing else).
+
+Non-endpoint traffic never leaves the cgroup, whatever the program tries.
+(Note: bwrap leaves host ``/sys`` visible — ``/sys/fs/cgroup`` included —
+so the model can *see* the cgroup tree; with ``nsdelegate`` it still cannot
+move itself out of the guard cgroup, and the nftables match follows the
+sending socket, not anything the process claims about itself.)
 
 Installing needs root once per boot; ``scripts/netguard.sh`` is the entire
 privileged surface, is idempotent, and proves the policy with a behavioural
@@ -64,29 +69,57 @@ CGROUP_NAME = "localbench-sandbox"
 CGROUP_DIR = CGROUP_ROOT / CGROUP_NAME
 NFT_TABLE = "localbench_guard"
 STAMP = Path("/run/localbench-netguard.stamp")
-STAMP_VERSION = "2"
+STAMP_VERSION = "3"
 SCRIPT = ROOT / "scripts" / "netguard.sh"
 HELPER = Path("/usr/local/libexec/localbench-netguard")
 SUDOERS = Path("/etc/sudoers.d/localbench-netguard")
+
+LOOPBACK_HOSTS = {"127.0.0.1", "::1", "localhost"}
 
 
 class NetguardError(RuntimeError):
     """Raised when the sandbox cannot be placed under kernel enforcement."""
 
 
-def endpoint_ports() -> list[int]:
-    """Every local endpoint port the sandbox must be able to reach."""
-    from .config import load_local
-    ports: set[int] = set()
+def endpoint_targets() -> list[tuple[str, int]]:
+    """Every (host, port) the sandbox must be able to reach.
+
+    Endpoints need not live on loopback: a server on another interface
+    (Tailscale, LAN) declares ``"host"`` in config/local.json (default
+    ``127.0.0.1``). Loopback targets are covered by the loopback rules;
+    anything else gets an explicit per-target nftables accept (TCP only,
+    that port only) — the cgroup drop still kills everything not listed.
+    """
+    from .config import ep_host, load_local
+    out: set[tuple[str, int]] = set()
     for ep in load_local().get("endpoints") or []:
         p = ep.get("port")
         if isinstance(p, bool):
             continue
-        if isinstance(p, int):
-            ports.add(p)
-        elif isinstance(p, str) and p.strip().isdigit():
-            ports.add(int(p.strip()))
-    return sorted(ports)
+        try:
+            port = int(str(p).strip())
+        except (ValueError, AttributeError):
+            continue
+        host = ep_host(ep).strip()
+        if host:
+            out.add((host, port))
+    return sorted(out)
+
+
+def endpoint_ports() -> list[int]:
+    """Every configured endpoint port — the nftables loopback port set.
+
+    This deliberately includes ports whose endpoint lives off-loopback: a
+    Tailscale-local address routes via ``dev lo`` (``ip route get`` proves
+    it), so that traffic is marked loopback traffic on the way back in and
+    must match the port set. A loopback listener on an endpoint port was
+    reachable by design anyway ("destined to an endpoint port → accept").
+    """
+    return sorted({port for _, port in endpoint_targets()})
+
+
+def _targets_key(targets: Optional[list[tuple[str, int]]] = None) -> str:
+    return ",".join(f"{h}:{p}" for h, p in sorted(targets or []))
 
 
 def _enabled() -> bool:
@@ -105,8 +138,8 @@ def _script_sha() -> str:
         return ""
 
 
-def _stamp_ok(ports: Optional[list[int]] = None) -> bool:
-    """Stamp exists, is current — right version, right ports, right helper."""
+def _stamp_ok(targets: Optional[list[tuple[str, int]]] = None) -> bool:
+    """Stamp exists, is current — right version, right targets, right helper."""
     try:
         text = STAMP.read_text(encoding="utf-8")
     except OSError:
@@ -115,9 +148,9 @@ def _stamp_ok(ports: Optional[list[int]] = None) -> bool:
         ln.split("=", 1) for ln in text.splitlines() if "=" in ln)
     if lines.get("version") != STAMP_VERSION:
         return False
-    if ports is not None:
-        want = sorted(str(p) for p in ports)
-        have_raw = lines.get("ports", "")
+    if targets is not None:
+        want = sorted(f"{h}:{p}" for h, p in targets)
+        have_raw = lines.get("targets", "")
         have = sorted(have_raw.split(",")) if have_raw else []
         if have != want:
             return False
@@ -129,14 +162,18 @@ def _stamp_ok(ports: Optional[list[int]] = None) -> bool:
     return True
 
 
-def installed(ports: Optional[list[int]] = None) -> bool:
+def _loopback_only(targets: list[tuple[str, int]]) -> bool:
+    return all(h in LOOPBACK_HOSTS for h, _ in targets)
+
+
+def installed(targets: Optional[list[tuple[str, int]]] = None) -> bool:
     """Cheap, unprivileged: guard cgroup + helper present, fresh, and ours?
 
     The sudoers entry cannot be checked from here — ``/etc/sudoers.d`` is not
     readable by unprivileged users — so :func:`ensure` probes it functionally
     (``sudo -n ... exec-as true``) at run start instead.
     """
-    return CGROUP_DIR.is_dir() and HELPER.is_file() and _stamp_ok(ports)
+    return CGROUP_DIR.is_dir() and HELPER.is_file() and _stamp_ok(targets)
 
 
 def _sudo(args: list[str], interactive: bool) -> subprocess.CompletedProcess:
@@ -204,7 +241,8 @@ def _probe() -> tuple[bool, str]:
         return True, ""
     msg = ((r.stderr or "") + (r.stdout or "")).strip()
     hint = (f"  Fix once:  sudo {SCRIPT} install {getpass.getuser()} "
-            f"{','.join(str(p) for p in endpoint_ports())}\n"
+            f"{','.join(str(p) for _, p in endpoint_targets())} "
+            f"{_targets_key(endpoint_targets())}\n"
             f"  (restores {SUDOERS}; then rerun this command)")
     return False, (msg + "\n" + hint) if msg else hint
 
@@ -213,19 +251,20 @@ def ensure() -> tuple[bool, str]:
     """Make sure the kernel guard is active for *this* config. Idempotent."""
     if not _enabled():
         return True, "netguard disabled (harness.netguard=false in config)"
-    ports = endpoint_ports()
-    if installed(ports):
+    targets = endpoint_targets()
+    if installed(targets):
         cull()
         ok, msg = _probe()
         if not ok:
             return False, msg
-        return True, f"netguard active (endpoint ports: {ports or 'none'})"
+        return True, f"netguard active (endpoints: {_targets_key(targets) or 'none'})"
     ok, msg = _run_script("install", [getpass.getuser(),
-                                      ",".join(str(p) for p in ports)],
+                                      ",".join(str(p) for _, p in targets),
+                                      _targets_key(targets)],
                           "installing kernel egress rules")
     if not ok:
         return False, msg
-    if not installed(ports):
+    if not installed(targets):
         return False, (msg + "\n  installer reported success but the guard is "
                        "not usable by this user")
     ok, probe_msg = _probe()
@@ -236,8 +275,9 @@ def ensure() -> tuple[bool, str]:
 
 def verify() -> tuple[bool, str]:
     """Behavioural self-test: spawn a process in the cgroup and attack."""
-    ports = endpoint_ports() if _enabled() else []
-    return _run_script("verify", [",".join(str(p) for p in ports)],
+    targets = endpoint_targets() if _enabled() else []
+    return _run_script("verify", [",".join(str(p) for _, p in targets),
+                                  _targets_key(targets)],
                        "verifying kernel egress rules")
 
 
@@ -260,7 +300,7 @@ def status() -> dict:
         "cgroup": str(CGROUP_DIR),
         "nft_table": NFT_TABLE,
         "stamp": str(STAMP),
-        "stamp_ports": (stamp or {}).get("ports", ""),
+        "stamp_targets": (stamp or {}).get("targets", ""),
         "helper": str(HELPER),
         "sudoers": str(SUDOERS),
         "script": str(SCRIPT),
@@ -286,7 +326,8 @@ def wrap_argv(cfg: dict, argv: list[str]) -> list[str]:
             "kernel egress guard is not installed — refusing to run the "
             f"model without it. Fix once: sudo {SCRIPT} install "
             f"{getpass.getuser()} "
-            f"{','.join(str(p) for p in endpoint_ports())}"
+            f"{','.join(str(p) for _, p in endpoint_targets())} "
+            f"{_targets_key(endpoint_targets())}"
             f"  (or set \"netguard\": false in the harness section of "
             f"config/local.json to opt out)")
     return ["sudo", "-n", str(HELPER), "exec-as"] + list(argv)
