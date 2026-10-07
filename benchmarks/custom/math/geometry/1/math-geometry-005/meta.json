@@ -1,0 +1,19 @@
+{
+  "id": "math-geometry-005",
+  "domain": "math",
+  "capability": "geometry",
+  "tier": 1,
+  "runs": ["plain"],
+  "expected_duration": "1-3",
+  "notes": "Isolates composite-area decomposition (add triangle, subtract semicircular hole) with pi fixed to 22/7 so the result is an exact integer, plus one unit-cost multiplication. Confounds removed: no perimeter, no trigonometry, no rounding. Tier 1: two area lookups and one subtraction; a strong model should be >85%. Grading scope: only the final 'FINAL:' line is graded, parsed as two integers. False-positive audit: (a) 180/6660 (pond added instead of removed), (b) area with pi=3.14 (non-integer/rejected by regex), (c) triangle as 9x12=108 instead of 54, (d) prose with no FINAL line, (e) correct line followed by trailing text - all rejected by verify.py.",
+  "contamination_source": "original",
+  "validation_log": {
+    "step2_verifier_vs_solution": "pass (126 + 54 - 77 = 103, 103 x 37 = 3811; worked solution in SOLUTION.md)",
+    "step3_wrong_responses_rejected": "5/5 rejected (pond-added, pi-3.14 decimal, undoubled-triangle, no FINAL line, trailing text after FINAL)",
+    "step4_cold_reread_ambiguity": "fixed: prompt now pins pi=22/7 exactly, states the shared edge has no area, and states the hole is removed, closing the three main misreadings",
+    "step5_self_contained_fresh_copy": "pass",
+    "step6_tier_and_duration": "tier 1, expected_duration 1-3",
+    "step7_staged": "pass"
+  },
+  "sandbox_exceptions": []
+}

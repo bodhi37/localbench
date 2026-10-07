@@ -1,0 +1,123 @@
+{
+  "roles": {
+    "viewer": {
+      "inherits": []
+    },
+    "editor": {
+      "inherits": [
+        "viewer"
+      ]
+    },
+    "deployer": {
+      "inherits": [
+        "editor"
+      ]
+    },
+    "auditor": {
+      "inherits": [
+        "viewer"
+      ]
+    },
+    "admin": {
+      "inherits": [
+        "deployer",
+        "auditor"
+      ]
+    }
+  },
+  "users": {
+    "alice": [
+      "editor"
+    ],
+    "bob": [
+      "viewer"
+    ],
+    "carol": [
+      "deployer"
+    ],
+    "dave": [
+      "auditor"
+    ],
+    "erin": [
+      "viewer",
+      "auditor"
+    ],
+    "frank": [
+      "admin"
+    ]
+  },
+  "permissions": [
+    {
+      "role": "viewer",
+      "action": "read",
+      "resource": "reports",
+      "effect": "allow"
+    },
+    {
+      "role": "viewer",
+      "action": "read",
+      "resource": "auditlog",
+      "effect": "deny"
+    },
+    {
+      "role": "viewer",
+      "action": "read",
+      "resource": "status",
+      "effect": "allow"
+    },
+    {
+      "role": "editor",
+      "action": "write",
+      "resource": "reports",
+      "effect": "allow"
+    },
+    {
+      "role": "editor",
+      "action": "deploy",
+      "resource": "prod",
+      "effect": "deny"
+    },
+    {
+      "role": "deployer",
+      "action": "deploy",
+      "resource": "prod",
+      "effect": "allow"
+    },
+    {
+      "role": "deployer",
+      "action": "write",
+      "resource": "reports",
+      "effect": "allow"
+    },
+    {
+      "role": "deployer",
+      "action": "read",
+      "resource": "auditlog",
+      "effect": "deny"
+    },
+    {
+      "role": "auditor",
+      "action": "read",
+      "resource": "auditlog",
+      "effect": "allow"
+    },
+    {
+      "role": "auditor",
+      "action": "read",
+      "resource": "reports",
+      "effect": "deny"
+    },
+    {
+      "role": "admin",
+      "action": "delete",
+      "resource": "prod",
+      "effect": "allow"
+    },
+    {
+      "role": "admin",
+      "action": "write",
+      "resource": "reports",
+      "effect": "allow"
+    }
+  ]
+}

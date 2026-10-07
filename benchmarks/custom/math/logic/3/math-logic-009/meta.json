@@ -1,0 +1,19 @@
+{
+  "id": "math-logic-009",
+  "domain": "math",
+  "capability": "logic",
+  "tier": 3,
+  "runs": ["plain"],
+  "expected_duration": "6-12",
+  "notes": "Isolates knights/knaves deduction over compound AND/OR statements fused with parity, primality, and comparison facts plus a final 100*K+N encoding; brute-force over 16 type assignments x 11 N values confirms a unique consistent pair. Confounds removed: no modal logic, no self-reference. Tier 3: requires 5+ chained deductions (Dara case-split, parity, primality, inclusive-or, knight count); a strong model should be ~50%. Grading scope: only the final 'FINAL:' line is graded, parsed as one integer. False-positive audit: (a) N=16 with miscounted K (e.g. 116/316/416), (b) exclusive-or reading of Bana, (c) 16 judged prime, (d) prose with no FINAL line, (e) correct line followed by trailing text - all rejected by verify.py.",
+  "contamination_source": "original",
+  "validation_log": {
+    "step2_verifier_vs_solution": "pass (unique solution: Aldo knave, Bana knight, Ciro knave, Dara knight, N=16, code=216; worked solution in SOLUTION.md)",
+    "step3_wrong_responses_rejected": "5/5 rejected (116 wrong-K, exclusive-or variant, 16-as-prime variant, no FINAL line, trailing text after FINAL)",
+    "step4_cold_reread_ambiguity": "fixed: prompt now pins inclusive-or semantics, 16 non-prime, and K=2 in the code formula, closing the three main misreadings",
+    "step5_self_contained_fresh_copy": "pass",
+    "step6_tier_and_duration": "tier 3, expected_duration 6-12",
+    "step7_staged": "pass"
+  },
+  "sandbox_exceptions": []
+}

@@ -1,0 +1,38 @@
+[
+  {
+    "id": "ADV-01",
+    "pkg": "auth-lib",
+    "severity": "critical",
+    "fixed_in": "2.4.2"
+  },
+  {
+    "id": "ADV-02",
+    "pkg": "data-orm",
+    "severity": "critical",
+    "fixed_in": "1.10.0"
+  },
+  {
+    "id": "ADV-03",
+    "pkg": "crypto-util",
+    "severity": "critical",
+    "fixed_in": "0.9.9"
+  },
+  {
+    "id": "ADV-04",
+    "pkg": "web-framework",
+    "severity": "high",
+    "fixed_in": "4.2.1"
+  },
+  {
+    "id": "ADV-05",
+    "pkg": "logger",
+    "severity": "high",
+    "fixed_in": "1.0.6"
+  },
+  {
+    "id": "ADV-06",
+    "pkg": "cache",
+    "severity": "medium",
+    "fixed_in": "2.2.3"
+  }
+]

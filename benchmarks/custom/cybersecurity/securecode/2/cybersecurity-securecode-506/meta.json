@@ -1,0 +1,21 @@
+{
+  "id": "cybersecurity-securecode-506",
+  "domain": "cybersecurity",
+  "capability": "securecode",
+  "tier": 2,
+  "runs": [
+    "code"
+  ],
+  "expected_duration": "3-8",
+  "notes": "Static secure-code repair: SQLi (string concat), shell injection (shell=True), weak RNG (random) in a shipped 3-function module; model delivers $OUT_DIR/fixed.py. Threat model: pre-commit remediation of one's own code; no live hosts, no network. Confounds: f-string SQL that 'looks' parameterized, shlex-quote half-fixes, random.SystemRandom mistaken for secrets. False-positive audit: (a) shell=True retained, (b) random import retained, (c) '+'/'%'/'format'/f-string in execute line, (d) injection row leaks, (e) host string split into argv, (f) short/non-unique tokens - all rejected. Untrusted code runs only in a stdlib-subprocess child with a 30s timeout.",
+  "contamination_source": "original",
+  "validation_log": {
+    "step2_verifier_vs_solution": "pass (answer recomputed from shipped resources by generator; worked reasoning in SOLUTION.md)",
+    "step3_wrong_responses_rejected": "pass (verified: mutated FINAL lines rejected, see validation run)",
+    "step4_cold_reread_ambiguity": "pass (FINAL field order, counting rules, tie-breaks and default-deny stated in prompt)",
+    "step5_self_contained_fresh_copy": "pass (all analysis inputs ship in resources/; answers in harness-side tests/expected.json)",
+    "step6_tier_and_duration": "tier 2, expected_duration 3-8",
+    "step7_staged": "pass (staging-new-custom only, never benchmarks/ or results/)"
+  },
+  "sandbox_exceptions": []
+}

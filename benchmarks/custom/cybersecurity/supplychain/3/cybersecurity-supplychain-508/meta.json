@@ -1,0 +1,21 @@
+{
+  "id": "cybersecurity-supplychain-508",
+  "domain": "cybersecurity",
+  "capability": "supplychain",
+  "tier": 3,
+  "runs": [
+    "code"
+  ],
+  "expected_duration": "5-12",
+  "notes": "Static supply-chain triage: 9-package lockfile, 6 advisories, exact-pin + same-major constraints; model names the minimal critical-clearing upgrade set and residual counts. Threat model: offline lockfile review; no installs, builds, or registry fetches. Confounds: upgrading the pinned web-framework, crossing data-orm to 2.x, extra non-minimal HIGH fixes, 'none' when upgrades exist. False-positive audit: (a) pinned upgrade, (b) major crossing, (c) downgrade, (d) non-minimal extras, (e) residuals disagreeing with recomputation - all rejected; verifier recomputes residuals from shipped files independent of expected.json.",
+  "contamination_source": "original",
+  "validation_log": {
+    "step2_verifier_vs_solution": "pass (answer recomputed from shipped resources by generator; worked reasoning in SOLUTION.md)",
+    "step3_wrong_responses_rejected": "pass (verified: mutated FINAL lines rejected, see validation run)",
+    "step4_cold_reread_ambiguity": "pass (FINAL field order, counting rules, tie-breaks and default-deny stated in prompt)",
+    "step5_self_contained_fresh_copy": "pass (all analysis inputs ship in resources/; answers in harness-side tests/expected.json)",
+    "step6_tier_and_duration": "tier 3, expected_duration 5-12",
+    "step7_staged": "pass (staging-new-custom only, never benchmarks/ or results/)"
+  },
+  "sandbox_exceptions": []
+}

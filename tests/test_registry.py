@@ -6,10 +6,24 @@ from localbench import registry
 from localbench.config import CUSTOM_ROOT
 
 
-def test_discovers_all_18_custom_tasks():
+def test_discovers_all_custom_tasks():
     got = registry.discover_custom()
-    assert len(got) == 18
-    assert len({d["ref"] for d in got}) == 18
+    assert len(got) == 54
+    assert len({d["ref"] for d in got}) == 54
+    # the original 18 must still be present
+    assert {"math-arithmetic-001", "math-number-theory-002",
+            "math-combinatorics-003", "science-chemistry-101",
+            "science-physics-102", "science-cs-theory-103",
+            "long-context-retrieval-201", "long-context-multi-hop-202",
+            "long-context-state-tracking-203",
+            "instruction-following-format-compliance-301",
+            "instruction-following-constraint-satisfaction-302",
+            "instruction-following-negative-constraints-303",
+            "agentic-coding-code-comprehension-401",
+            "agentic-coding-debugging-402",
+            "agentic-coding-implementation-403",
+            "cybersecurity-defsec-501", "cybersecurity-ctf-502",
+            "cybersecurity-offsec-503"} <= {d["ref"] for d in got}
 
 
 def test_custom_benchmarks_are_the_domains():
@@ -41,7 +55,7 @@ def test_explicit_timeout_wins():
 
 def test_load_units_custom_only():
     units = registry.load_units(benchmarks=["math"])
-    assert len(units) == 3
+    assert len(units) == 9
     assert {u.benchmark for u in units} == {"math"}
     assert all(u.grader == "verify" for u in units)
     assert all(u.task_dir is not None for u in units)

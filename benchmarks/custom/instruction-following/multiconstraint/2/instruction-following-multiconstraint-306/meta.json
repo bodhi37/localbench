@@ -1,0 +1,20 @@
+{
+  "id": "instruction-following-multiconstraint-306",
+  "domain": "instruction-following",
+  "capability": "multiconstraint",
+  "tier": 2,
+  "runs": ["plain"],
+  "expected_duration": "3-6",
+  "notes": "Isolates simultaneous scheduling constraints (bijection over 5 slots, forbidden time-window cells, J3-even window, J1/J4 late-exclusion) while minimising makespan with a unique optimum. 5! = 120 candidates, 18 feasible, minimum 47 unique with strictly worse runners-up (50) so a greedy answer is visibly wrong; strong-model prior 70-90%. Grading scope: final 'FINAL:' line only; the verifier re-checks feasibility, re-sums the makespan, and recomputes the optimum by brute force. False-positive audit: (a) the 50-cost runner-up, (b) J3 on odd slot S3, (c) a forbidden dash cell, (d) J1+J4 both late, (e) makespan disagreeing with the listed assignment - all rejected.",
+  "contamination_source": "original (classic assignment structure, table and constraints are bespoke)",
+  "validation_log": {
+    "step2_verifier_vs_solution": "pass (re-derived from prompt.md; worked solution in SOLUTION.md)",
+    "step2b_independent_confirmation": "pass (brute-force enumeration confirms 18 feasible, unique minimum 47)",
+    "step3_wrong_responses_rejected": "5/5 rejected (runner-up, odd J3, dash cell, double-late, inconsistent makespan)",
+    "step4_cold_reread_ambiguity": "'exactly one job per slot', dash meaning, even-slot rule, late-exclusion, makespan definition and uniqueness are stated; four readings converge",
+    "step5_self_contained_fresh_copy": "pass",
+    "step6_tier_and_duration": "tier 2, expected_duration 3-6",
+    "step7_staged": "pass"
+  },
+  "sandbox_exceptions": []
+}

@@ -1,0 +1,19 @@
+{
+  "id": "math-sequences-007",
+  "domain": "math",
+  "capability": "sequences",
+  "tier": 2,
+  "runs": ["plain"],
+  "expected_duration": "3-6",
+  "notes": "Isolates exact iteration of a quadratic recurrence across 5 chained squarings into the millions, plus a digit-sum check that pins every digit. Confounds removed: no closed form needed, no modular arithmetic. Tier 2: five exact big-integer steps where one slip cascades; a strong model should be ~65%. Grading scope: only the final 'FINAL:' line is graded, parsed as two integers. False-positive audit: (a) off-by-one indexing a5=1807, (b) float-rounded a6 off by one, (c) correct a6 with mis-added digit sum, (d) prose with no FINAL line, (e) correct line followed by trailing text - all rejected by verify.py.",
+  "contamination_source": "original",
+  "validation_log": {
+    "step2_verifier_vs_solution": "pass (2,3,7,43,1807,3263443; digit sum 3+2+6+3+4+4+3=25; worked solution in SOLUTION.md)",
+    "step3_wrong_responses_rejected": "5/5 rejected (a5 off-by-one, a6 off-by-one float error, wrong digit sum, no FINAL line, trailing text after FINAL)",
+    "step4_cold_reread_ambiguity": "fixed: prompt now states indexing starts at a(1) with no a(0) and requires exact integer arithmetic, closing the off-by-one and float-rounding readings",
+    "step5_self_contained_fresh_copy": "pass",
+    "step6_tier_and_duration": "tier 2, expected_duration 3-6",
+    "step7_staged": "pass"
+  },
+  "sandbox_exceptions": []
+}

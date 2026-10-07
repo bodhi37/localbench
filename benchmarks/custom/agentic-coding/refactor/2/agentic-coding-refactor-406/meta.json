@@ -1,0 +1,22 @@
+{
+  "id": "agentic-coding-refactor-406",
+  "domain": "agentic-coding",
+  "capability": "refactor",
+  "tier": 2,
+  "runs": [
+    "code"
+  ],
+  "expected_duration": "3-6",
+  "notes": "Isolates behaviour-preserving refactoring: split a correct pricing monolith into four required helpers (line_total, discount_rate, apply_discount, order_total) with exact threshold/rounding/error semantics. Tier 2: decomposition is checked by AST (order_total must call line_total and apply_discount; apply_discount must call discount_rate) over 24 fixed vectors covering exact thresholds, just-below values, ValueError propagation, and no-mutation; import-time output fails. False-positive audit: (a) the unrefactored monolith (right numbers, no helpers), (b) helpers present but arithmetic inlined, (c) off-by-one thresholds (>= vs >), (d) noisy import, (e) missing file - all rejected.",
+  "contamination_source": "original (bespoke module, spec and vectors written for this benchmark)",
+  "validation_log": {
+    "step2_verifier_vs_solution": "pass (decomposed orders.py: all 24 vectors pass, AST decomposition check passes)",
+    "step2b_verified_buggy_behaviour": "pass (monolith fails AST check: required function line_total is missing)",
+    "step3_wrong_responses_rejected": "4/4 rejected (monolith, helpers-defined-but-inlined, noisy import pattern, missing file)",
+    "step4_cold_reread_ambiguity": "exact formulas, >= thresholds, ValueError propagation, empty-order 0.0, no-mutation, call-based decomposition rule all stated",
+    "step5_self_contained_fresh_copy": "pass (vectors live in tests/, harness-side)",
+    "step6_tier_and_duration": "tier 2, expected_duration 3-6",
+    "step7_staged": "pass"
+  },
+  "sandbox_exceptions": []
+}

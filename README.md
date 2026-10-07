@@ -11,7 +11,7 @@ All tasks share one sandboxed Pi harness — one model on the GPU at a time — 
 
 | Source | Benchmarks | Items | Grader |
 |---|---|---:|---|
-| **Custom** | math, science, long-context, instruction-following, agentic-coding, cybersecurity | 18 tasks | each task's own `verify.py` |
+| **Custom** | math, science, long-context, instruction-following, agentic-coding, cybersecurity | 54 tasks | each task's own `verify.py` |
 | **Published** | MMLU, MMLU-Pro, GPQA Diamond, ARC-Challenge, HellaSwag, WinoGrande, TruthfulQA MC1 | 39,570 | `mcq` |
 | | MATH-500, GSM8K, AIME 2024 | 1,849 | `math` |
 | | HumanEval+, MBPP+ | 542 | `code` |

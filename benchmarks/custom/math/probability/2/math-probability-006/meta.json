@@ -1,0 +1,19 @@
+{
+  "id": "math-probability-006",
+  "domain": "math",
+  "capability": "probability",
+  "tier": 2,
+  "runs": ["plain"],
+  "expected_duration": "3-6",
+  "notes": "Isolates conditional counting without replacement: enumerate exactly-one-pair hands per color and form the Bayes ratio, then reduce. Confounds removed: no Bayes-chain, no continuous distributions, ordering irrelevant. Tier 2: three combination counts plus a reduction check; a strong model should be ~70%. Grading scope: only the final 'FINAL:' line is graded, parsed as two integers. False-positive audit: (a) with-replacement computation, (b) denominator including triples 19/105, (c) non-reduced equivalent 144/742, (d) prose with no FINAL line, (e) correct line followed by trailing text - all rejected by verify.py.",
+  "contamination_source": "original",
+  "validation_log": {
+    "step2_verifier_vs_solution": "pass (ruby 72, sapphire 110, emerald 189, total 371, gcd(72,371)=1; worked solution in SOLUTION.md)",
+    "step3_wrong_responses_rejected": "5/5 rejected (with-replacement value, triples-included 19/105, non-reduced 144/742, no FINAL line, trailing text after FINAL)",
+    "step4_cold_reread_ambiguity": "fixed: prompt now states triples are excluded from numerator and denominator and that a non-reduced equivalent is wrong, closing the two main misreadings",
+    "step5_self_contained_fresh_copy": "pass",
+    "step6_tier_and_duration": "tier 2, expected_duration 3-6",
+    "step7_staged": "pass"
+  },
+  "sandbox_exceptions": []
+}

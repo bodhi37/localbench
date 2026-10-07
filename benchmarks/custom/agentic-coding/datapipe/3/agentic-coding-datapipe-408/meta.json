@@ -1,0 +1,22 @@
+{
+  "id": "agentic-coding-datapipe-408",
+  "domain": "agentic-coding",
+  "capability": "datapipe",
+  "tier": 3,
+  "runs": [
+    "code"
+  ],
+  "expected_duration": "5-10",
+  "notes": "Isolates a three-stage data pipeline (normalize -> dedupe -> aggregate) with strict stage ordering and error-row accounting: whitespace/case normalisation, numeric-string hours, bool/nan/inf/negative rejection, first-occurrence dedupe on the normalised triple, per-dept rounded totals. Tier 3: interacting stages plus ~10 error classes, 25 fixed vectors (empty, all-error, multi-dept, dedupe variants) with 4 no-mutation checks; import-time output fails. False-positive audit: (a) stubs raising NotImplementedError, (b) no-dedupe implementation, (c) bool-accepting implementation, (d) duplicates-counted-as-errors implementation, (e) missing file - all rejected.",
+  "contamination_source": "original (bespoke module, spec and vectors written for this benchmark)",
+  "validation_log": {
+    "step2_verifier_vs_solution": "pass (reference pipeline.py: all 25 vectors pass incl. 4 no-mutation checks)",
+    "step2b_verified_buggy_behaviour": "pass (no-dedupe/bool-accepting variant fails p-bool, p-dedupe, p-zero-hours, p-mixed)",
+    "step3_wrong_responses_rejected": "3/3 rejected (no-dedupe variant, noisy import pattern, missing file); stubs raise NotImplementedError",
+    "step4_cold_reread_ambiguity": "stage order, normalization rules, bool/nan/inf rejection, dedupe key and first-occurrence order, rounding points, error accounting, no-mutation all stated",
+    "step5_self_contained_fresh_copy": "pass (vectors live in tests/, harness-side)",
+    "step6_tier_and_duration": "tier 3, expected_duration 5-10",
+    "step7_staged": "pass"
+  },
+  "sandbox_exceptions": []
+}

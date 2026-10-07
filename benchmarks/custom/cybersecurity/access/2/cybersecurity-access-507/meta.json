@@ -1,0 +1,21 @@
+{
+  "id": "cybersecurity-access-507",
+  "domain": "cybersecurity",
+  "capability": "access",
+  "tier": 2,
+  "runs": [
+    "code"
+  ],
+  "expected_duration": "3-8",
+  "notes": "Static RBAC audit: 5 roles with transitive inheritance, 6 users (one multi-role), 12 allow/deny rules, 30 requests. Threat model: offline policy review; no live directory or IAM calls. Confounds: deny-override vs most-specific-wins intuition, upward inheritance, default-deny rows (unknown action 'restart', ungoverned combos). False-positive audit: (a) R-017=allow (misses inherited editor deny), (b) erin/dave auditlog=allow (misses viewer deny), (c) frank deploy prod=allow, (d) default-deny rows counted as allow, (e) counts not summing to 30 - all rejected.",
+  "contamination_source": "original",
+  "validation_log": {
+    "step2_verifier_vs_solution": "pass (answer recomputed from shipped resources by generator; worked reasoning in SOLUTION.md)",
+    "step3_wrong_responses_rejected": "pass (verified: mutated FINAL lines rejected, see validation run)",
+    "step4_cold_reread_ambiguity": "pass (FINAL field order, counting rules, tie-breaks and default-deny stated in prompt)",
+    "step5_self_contained_fresh_copy": "pass (all analysis inputs ship in resources/; answers in harness-side tests/expected.json)",
+    "step6_tier_and_duration": "tier 2, expected_duration 3-8",
+    "step7_staged": "pass (staging-new-custom only, never benchmarks/ or results/)"
+  },
+  "sandbox_exceptions": []
+}

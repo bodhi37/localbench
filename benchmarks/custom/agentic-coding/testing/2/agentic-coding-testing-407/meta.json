@@ -1,0 +1,22 @@
+{
+  "id": "agentic-coding-testing-407",
+  "domain": "agentic-coding",
+  "capability": "testing",
+  "tier": 2,
+  "runs": [
+    "code"
+  ],
+  "expected_duration": "3-6",
+  "notes": "Isolates fixing three seeded defect classes in a stats module against a written spec: an initialisation bug (mean double-counts xs[0]), a boundary bug (median averages s[mid], s[mid+1], IndexError on 2-element input), and an aliasing bug (mode sorts the caller's list in place while returning the right value). Tier 2: three distinct defect classes across three functions, 16 fixed vectors (empty, singleton, even/odd, ties, negatives) with 7 no-mutation checks; import-time output fails. False-positive audit: (a) the original buggy module, (b) init-only fix, (c) boundary-only fix, (d) value-correct but still-mutating mode, (e) missing file - all rejected.",
+  "contamination_source": "original (bespoke module, spec and vectors written for this benchmark)",
+  "validation_log": {
+    "step2_verifier_vs_solution": "pass (fixed stats.py: all 16 vectors pass incl. 7 no-mutation checks)",
+    "step2b_verified_buggy_behaviour": "pass (seeded buggy fails 8/16: init, boundary incl. IndexError on 2-element median, aliasing)",
+    "step3_wrong_responses_rejected": "3/3 rejected (original buggy, noisy import pattern, missing file); partial fixes fail subsets by construction",
+    "step4_cold_reread_ambiguity": "odd-median value return, even-median formula, tie-to-smallest, None-on-empty, no-mutation and silent-import rules all stated",
+    "step5_self_contained_fresh_copy": "pass (vectors live in tests/, harness-side)",
+    "step6_tier_and_duration": "tier 2, expected_duration 3-6",
+    "step7_staged": "pass"
+  },
+  "sandbox_exceptions": []
+}

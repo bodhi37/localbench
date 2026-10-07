@@ -1,0 +1,19 @@
+{
+  "id": "math-algebra-004",
+  "domain": "math",
+  "capability": "algebra",
+  "tier": 1,
+  "runs": ["plain"],
+  "expected_duration": "1-3",
+  "notes": "Isolates exact solution of a 3x3 integer linear system plus one derived quadratic index, where intermediate elimination fractions must not be rounded. Confounds removed: no geometry, no probability, coefficients small. Tier 1: single elimination chain with unique integer solution; a strong model should be >85%. Grading scope: only the final 'FINAL:' line is graded, parsed as four integers. False-positive audit: (a) rounded decimals (e.g. x=4.99), (b) correct x,y,z but w computed from rounded values, (c) w with wrong weights (x^2+y^2+z^2=33), (d) prose with no FINAL line, (e) correct line followed by trailing text - all rejected by verify.py.",
+  "contamination_source": "original",
+  "validation_log": {
+    "step2_verifier_vs_solution": "pass (solution re-derived from prompt.md by exact fraction elimination; worked solution in SOLUTION.md)",
+    "step3_wrong_responses_rejected": "5/5 rejected (rounded x, w-from-rounded, wrong-weight w=33, no FINAL line, trailing text after FINAL)",
+    "step4_cold_reread_ambiguity": "fixed: prompt now states elimination produces non-integer intermediates and rounding them changes the answer, closing the 'round early' reading",
+    "step5_self_contained_fresh_copy": "pass",
+    "step6_tier_and_duration": "tier 1, expected_duration 1-3",
+    "step7_staged": "pass"
+  },
+  "sandbox_exceptions": []
+}

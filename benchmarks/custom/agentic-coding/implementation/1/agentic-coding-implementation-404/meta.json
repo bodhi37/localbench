@@ -1,0 +1,22 @@
+{
+  "id": "agentic-coding-implementation-404",
+  "domain": "agentic-coding",
+  "capability": "implementation",
+  "tier": 1,
+  "runs": [
+    "code"
+  ],
+  "expected_duration": "2-4",
+  "notes": "Isolates implementing two pure interval helpers from a written spec: sort-and-sweep merge (overlap or touching, next start <= current end) plus an inclusive point query. Tier 1: single file, no dependencies, 15 fixed vectors (empty, single, unsorted, nested, touching, gaps, negatives, duplicates, endpoint queries), several with a no-mutation check; import-time output fails. False-positive audit: (a) stubs raising NotImplementedError, (b) strict-overlap merge that misses touching intervals, (c) unsorted passthrough, (d) noisy import, (e) missing file - all rejected.",
+  "contamination_source": "original (bespoke module, spec and vectors written for this benchmark)",
+  "validation_log": {
+    "step2_verifier_vs_solution": "pass (reference intervals.py: all 15 vectors pass, silent import, no mutation)",
+    "step2b_verified_buggy_behaviour": "pass (strict-overlap variant fails m-touching and m-chain)",
+    "step3_wrong_responses_rejected": "4/4 rejected (strict-overlap merge, stubs raising NotImplementedError, noisy import, missing file)",
+    "step4_cold_reread_ambiguity": "touching-vs-gap rule with examples, tuple input vs list output, inclusive endpoints, no-mutation and silent-import rules all stated",
+    "step5_self_contained_fresh_copy": "pass (vectors live in tests/, harness-side)",
+    "step6_tier_and_duration": "tier 1, expected_duration 2-4",
+    "step7_staged": "pass"
+  },
+  "sandbox_exceptions": []
+}

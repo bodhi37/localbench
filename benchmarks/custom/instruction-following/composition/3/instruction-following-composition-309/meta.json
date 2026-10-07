@@ -1,0 +1,20 @@
+{
+  "id": "instruction-following-composition-309",
+  "domain": "instruction-following",
+  "capability": "composition",
+  "tier": 3,
+  "runs": ["plain"],
+  "expected_duration": "6-10",
+  "notes": "Isolates compositional formatting obedience: a single-line JSON object with nine top-level keys in alphabetical order, a nested stats object with sorted keys, exact separators (no spaces/tabs anywhere), strict JSON types (bare numbers/booleans, quoted strings), and two nested conditional derivations (tier HIGH since total=135>100; alert true since max reading 57>50) plus sum/mean/argmax/count-sorted/check-hex derivations. Tier 3: sorting plus whitespace plus nesting plus conditionals must all hold at once; strong-model prior 40-70%. Grading scope: whole response (one line); verifier parses JSON strictly and checks raw key order and whitespace. False-positive audit: (a) pretty-printed JSON with spaces/newlines, (b) keys in prompt order instead of alphabetical, (c) alert as string \"true\", (d) tier LOW, (e) order sorted by label instead of reading - all rejected.",
+  "contamination_source": "original (bespoke sensor values and schema)",
+  "validation_log": {
+    "step2_verifier_vs_solution": "pass (re-derived from prompt.md: total=135 mean=45 tier=HIGH alert=true; worked solution in SOLUTION.md)",
+    "step2b_independent_confirmation": "pass (second derivation confirms order C,A,B and check 09)",
+    "step3_wrong_responses_rejected": "5/5 rejected (pretty print, unsorted keys, string alert, wrong tier, label-sorted order)",
+    "step4_cold_reread_ambiguity": "alphabetical key orders, no-whitespace rule, type rules, half-up mean and both conditionals are explicit; four readings converge",
+    "step5_self_contained_fresh_copy": "pass",
+    "step6_tier_and_duration": "tier 3, expected_duration 6-10",
+    "step7_staged": "pass"
+  },
+  "sandbox_exceptions": []
+}

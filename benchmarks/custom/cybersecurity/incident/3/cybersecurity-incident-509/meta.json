@@ -1,0 +1,21 @@
+{
+  "id": "cybersecurity-incident-509",
+  "domain": "cybersecurity",
+  "capability": "incident",
+  "tier": 3,
+  "runs": [
+    "code"
+  ],
+  "expected_duration": "5-12",
+  "notes": "Static incident reconstruction: 60-event timeline, three hypotheses, exact-ID evidence triple (initial access, lateral step, exfil flow). Threat model: post-incident paper review of a sanitized timeline; no live hosts, no payload handling. Confounds: RDP brute-force noise with zero success (H2 bait), clean vendor patch (H3 bait), routine cloud sync/USB/DNS volume. False-positive audit: (a) H2/H3 selection, (b) citing the macro-exec instead of the phishing email, (c) citing recon DNS or cloud sync as exfil, (d) off-by-one event IDs - all rejected.",
+  "contamination_source": "original",
+  "validation_log": {
+    "step2_verifier_vs_solution": "pass (answer recomputed from shipped resources by generator; worked reasoning in SOLUTION.md)",
+    "step3_wrong_responses_rejected": "pass (verified: mutated FINAL lines rejected, see validation run)",
+    "step4_cold_reread_ambiguity": "pass (FINAL field order, counting rules, tie-breaks and default-deny stated in prompt)",
+    "step5_self_contained_fresh_copy": "pass (all analysis inputs ship in resources/; answers in harness-side tests/expected.json)",
+    "step6_tier_and_duration": "tier 3, expected_duration 5-12",
+    "step7_staged": "pass (staging-new-custom only, never benchmarks/ or results/)"
+  },
+  "sandbox_exceptions": []
+}

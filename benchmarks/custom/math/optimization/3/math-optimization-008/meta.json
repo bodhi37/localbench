@@ -1,0 +1,19 @@
+{
+  "id": "math-optimization-008",
+  "domain": "math",
+  "capability": "optimization",
+  "tier": 3,
+  "runs": ["plain"],
+  "expected_duration": "6-12",
+  "notes": "Isolates exhaustive 0/1 knapsack search (64 subsets) where greedy-by-ratio and merely-full-manifest heuristics fail; the optimum B,C,F=57 beats two distinct 56-valued full manifests. Confounds removed: no fractional items, weights/values small integers. Tier 3: requires enumerating and comparing whole feasible subsets (5+ chained deductions); a strong model should be ~50%. Grading scope: only the final 'FINAL:' line is graded (alphabetical letter list plus integer). False-positive audit: (a) greedy A,B,C=53, (b) near-miss A,D,F=56 or A,B,D,E=56, (c) letter repetition or wrong order, (d) prose with no FINAL line, (e) correct line followed by trailing text - all rejected by verify.py.",
+  "contamination_source": "original",
+  "validation_log": {
+    "step2_verifier_vs_solution": "pass (all 64 subsets enumerated: unique optimum B,C,F mass 20 value 57; runners-up 56; worked solution in SOLUTION.md)",
+    "step3_wrong_responses_rejected": "5/5 rejected (greedy A,B,C=53, near-miss A,D,F=56, repeated-letter format, no FINAL line, trailing text after FINAL)",
+    "step4_cold_reread_ambiguity": "fixed: prompt now states each item at most once, greedy is not optimal, and full is not automatically optimal, closing the three main misreadings",
+    "step5_self_contained_fresh_copy": "pass",
+    "step6_tier_and_duration": "tier 3, expected_duration 6-12",
+    "step7_staged": "pass"
+  },
+  "sandbox_exceptions": []
+}

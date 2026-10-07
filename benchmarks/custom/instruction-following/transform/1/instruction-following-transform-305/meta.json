@@ -1,0 +1,19 @@
+{
+  "id": "instruction-following-transform-305",
+  "domain": "instruction-following",
+  "capability": "transform",
+  "tier": 1,
+  "runs": ["plain"],
+  "expected_duration": "1-3",
+  "notes": "Isolates case/punctuation/whitespace obedience: the transform is a fixed 4-step pipeline (lowercase, strip non-letters-spaces, collapse spaces, hyphen-join) applied to three short sentences, plus a zero-padded count and a re-derived length checksum. The whole response is graded (7 lines) so preamble or trailing text fails. Tier 1: mechanical rewriting; strong-model prior >= 90%. Grading scope: whole response after trimming outer blank lines. False-positive audit: (a) underscores instead of hyphens, (b) punctuation retained (exclamation/comma/period), (c) CHECK counting prefixes or unpadded (72), (d) uppercase retained, (e) preamble/trailing note - all rejected.",
+  "contamination_source": "original (bespoke sentences and pipeline)",
+  "validation_log": {
+    "step2_verifier_vs_solution": "pass (re-derived from prompt.md; worked solution in SOLUTION.md)",
+    "step3_wrong_responses_rejected": "5/5 rejected (underscores, retained punctuation, bad check, uppercase, preamble)",
+    "step4_cold_reread_ambiguity": "pipeline order, hyphen separator, 3-digit padding and 'entire response' are explicit; four readings converge",
+    "step5_self_contained_fresh_copy": "pass",
+    "step6_tier_and_duration": "tier 1, expected_duration 1-3",
+    "step7_staged": "pass"
+  },
+  "sandbox_exceptions": []
+}

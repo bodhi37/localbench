@@ -1,0 +1,22 @@
+{
+  "id": "agentic-coding-edge-405",
+  "domain": "agentic-coding",
+  "capability": "edge",
+  "tier": 1,
+  "runs": [
+    "code"
+  ],
+  "expected_duration": "2-4",
+  "notes": "Isolates CSV edge-case handling in a hand-rolled parser: empty document, trailing-newline suppression, CRLF normalisation, empty fields, quoted commas/newlines, doubled-quote escapes, significant whitespace, blank middle lines, plus two malformed inputs that must raise ValueError. Tier 1: single pure function, 18 fixed vectors; the csv module is banned by source inspection and import-time output fails. False-positive audit: (a) the naive split/strip implementation, (b) a version that strips fields, (c) a version that never raises, (d) a csv-module wrapper, (e) missing file - all rejected.",
+  "contamination_source": "original (bespoke module, spec and vectors written for this benchmark)",
+  "validation_log": {
+    "step2_verifier_vs_solution": "pass (reference csvparse.py: all 18 vectors pass, silent import)",
+    "step2b_verified_buggy_behaviour": "pass (naive split/strip version fails 9/18 vectors)",
+    "step3_wrong_responses_rejected": "4/4 rejected (naive version, csv-module wrapper, noisy import pattern, missing file)",
+    "step4_cold_reread_ambiguity": "empty-doc, trailing-newline, CRLF, quote-escape, strict after-quote, ValueError cases, whitespace significance, csv-module ban all stated",
+    "step5_self_contained_fresh_copy": "pass (vectors live in tests/, harness-side)",
+    "step6_tier_and_duration": "tier 1, expected_duration 2-4",
+    "step7_staged": "pass"
+  },
+  "sandbox_exceptions": []
+}

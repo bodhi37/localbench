@@ -1,0 +1,19 @@
+{
+  "id": "instruction-following-procedure-307",
+  "domain": "instruction-following",
+  "capability": "procedure",
+  "tier": 2,
+  "runs": ["plain"],
+  "expected_duration": "3-6",
+  "notes": "Isolates multi-step procedure obedience: 8 ordered register updates with three conditional branches (A>=B, B>30, A-even) whose directions are fixed by the evolving state, plus a digit-sum hex CHECK and a STEPS count. Skipping a step or mis-taking any branch changes the FINAL registers. Tier 2: short simulation with state-dependent branches; strong-model prior 70-90%. Grading scope: final 'FINAL:' line only; the verifier re-executes the procedure. False-positive audit: (a) step-3 else-branch taken (A=14 B=19 path), (b) step-5 else-branch taken, (c) step-6 skipped, (d) step-7 odd-branch taken, (e) CHECK in decimal - all rejected.",
+  "contamination_source": "original (bespoke register program)",
+  "validation_log": {
+    "step2_verifier_vs_solution": "pass (independent simulation from prompt.md gives A=38 B=30 CHECK=0E; worked solution in SOLUTION.md)",
+    "step3_wrong_responses_rejected": "5/5 rejected (wrong branch x3, skipped step, decimal check)",
+    "step4_cold_reread_ambiguity": "initial values, step order, branch predicates, even definition, CHECK hex format and STEPS are explicit; four readings converge",
+    "step5_self_contained_fresh_copy": "pass",
+    "step6_tier_and_duration": "tier 2, expected_duration 3-6",
+    "step7_staged": "pass"
+  },
+  "sandbox_exceptions": []
+}
